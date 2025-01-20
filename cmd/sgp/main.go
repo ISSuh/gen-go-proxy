@@ -1,13 +1,35 @@
-﻿package main
+﻿// MIT License
+
+// Copyright (c) 2025 ISSuh
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+package main
 
 import (
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"strings"
-	"text/template"
+
+	"github.com/ISSuh/simple-gen-proxy/internal/option"
 )
 
 type Import struct {
@@ -15,27 +37,18 @@ type Import struct {
 	Path  string
 }
 
-type Method struct {
-	Name       string
-	Params     string
-	ParamNames string
-	Results    string
-	ResultVars string
-	HasResults bool
-}
-
-type TemplateData struct {
-	PackageName   string
-	Imports       []Import
-	InterfaceName string
-	ProxyTypeName string
-	Methods       []Method
-}
-
 func main() {
-	// 소스 파일을 파싱하여 인터페이스 정보를 추출합니다.
+	arg := option.NewArguments()
+	if err := arg.Validate(); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Target: %s\n", arg.Target)
+	fmt.Printf("Output: %s\n", arg.Output)
+	fmt.Printf("Suffix: %s\n", arg.Suffix)
+
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, "source.go", nil, parser.AllErrors)
+	node, err := parser.ParseFile(fset, arg.Target, nil, parser.AllErrors)
 	if err != nil {
 		panic(err)
 	}
@@ -75,95 +88,6 @@ func main() {
 		return true
 	})
 
-	methods := []Method{}
-	for _, method := range ifaceType.Methods.List {
-		if len(method.Names) == 0 {
-			continue
-		}
-		methodName := method.Names[0].Name
-		funcType := method.Type.(*ast.FuncType)
-
-		params := []string{}
-		paramNames := []string{}
-		for _, param := range funcType.Params.List {
-			for _, name := range param.Names {
-				paramName := name.Name
-				paramType := exprToString(param.Type)
-				params = append(params, paramName+" "+paramType)
-				paramNames = append(paramNames, paramName)
-			}
-		}
-
-		results := []string{}
-		resultVars := []string{}
-		if funcType.Results != nil {
-			for i, result := range funcType.Results.List {
-				resultType := exprToString(result.Type)
-				results = append(results, resultType)
-				resultVars = append(resultVars, fmt.Sprintf("r%d", i))
-			}
-		}
-
-		methods = append(methods, Method{
-			Name:       methodName,
-			Params:     strings.Join(params, ", "),
-			ParamNames: strings.Join(paramNames, ", "),
-			Results:    formatResults(results),
-			ResultVars: strings.Join(resultVars, ", "),
-			HasResults: len(results) > 0,
-		})
-	}
-
-	data := TemplateData{
-		PackageName:   node.Name.Name,
-		Imports:       imports,
-		InterfaceName: ifaceName,
-		ProxyTypeName: ifaceName + "Proxy",
-		Methods:       methods,
-	}
-
-	tmpl, err := template.ParseFiles("proxy_template.go.tmpl")
-	if err != nil {
-		panic(err)
-	}
-
-	file, err := os.Create("proxy_generated.go")
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	err = tmpl.Execute(file, data)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func exprToString(expr ast.Expr) string {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		return t.Name
-	case *ast.SelectorExpr:
-		return exprToString(t.X) + "." + t.Sel.Name
-	case *ast.StarExpr:
-		return "*" + exprToString(t.X)
-	case *ast.ArrayType:
-		return "[]" + exprToString(t.Elt)
-	case *ast.MapType:
-		return "map[" + exprToString(t.Key) + "]" + exprToString(t.Value)
-	case *ast.FuncType:
-		return "func" // Simplified for brevity
-	default:
-		return ""
-	}
-}
-
-func formatResults(results []string) string {
-	if len(results) == 0 {
-		return ""
-	}
-	if len(results) == 1 {
-		return results[0]
-	}
-	return "(" + strings.Join(results, ", ") + ")"
+	fmt.Printf("Interface Name: %s\n", ifaceName)
+	fmt.Printf("Imports: %v\n", imports)
 }

@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 
 // Copyright (c) 2025 ISSuh
 
@@ -20,8 +20,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package entity
+package option
 
-type B struct {
-	id int
+import (
+	"errors"
+
+	"github.com/alexflint/go-arg"
+)
+
+type Arguments struct {
+	Target string `arg:"-t,--target" help:"target interface source code file"`
+	Output string `arg:"-o,--output" help:"output file path. default is current directory"`
+	Suffix string `arg:"-s,--suffix" help:"suffix for the generated code. default is '_proxy.go'"`
+}
+
+func NewArguments() Arguments {
+	a := Arguments{}
+	arg.MustParse(&a)
+	return a
+}
+
+func (a *Arguments) Validate() error {
+	if a.Target == "" {
+		return errors.New("target interface source code file is empty")
+	}
+
+	if a.Output == "" {
+		a.Output = "./"
+	}
+
+	return nil
 }
