@@ -12,15 +12,30 @@ type {{.ProxyTypeName}} struct {
     target {{.InterfaceName}}
 }
 
-func New{{.ProxyTypeName}}(target {{.InterfaceName}}) {{.InterfaceName}} {
-    return &{{.ProxyTypeName}}{target: target}
+func New{{.ProxyTypeName}}(target {{.InterfaceName}}) *{{.ProxyTypeName}} {
+    return &{{.ProxyTypeName}}{
+        target: target,
+    }
 }
 
 {{range .Methods}}
 func (p *{{$.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.Results}} {
-    fmt.Println("Before {{.Name}}")
-    {{if .HasResults}}{{.ResultVars}} := {{end}}p.target.{{.Name}}({{.ParamNames}})
-    fmt.Println("After {{.Name}}")
-    {{if .HasResults}}return {{.ResultVars}}{{end}}
+    {{if .IsTransaction}}
+        fmt.Println("Before {{.Name}} (transaction)")
+        
+        {{if .HasResults}}
+            {{.ResultVars}} := {{end}}p.target.{{.Name}}({{.ParamNames}})
+        {{else}}
+            p.target.{{.Name}}({{.ParamNames}})
+        {{end}}
+
+        fmt.Println("After {{.Name}} (transaction)")
+
+        {{if .HasResults}}
+            return {{.ResultVars}}{{end}}
+        {{end}}
+    {{else}}
+        return p.target.{{.Name}}({{.ParamNames}})
+    {{end}}
 }
 {{end}}

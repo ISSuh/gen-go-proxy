@@ -28,10 +28,17 @@ import (
 	"github.com/alexflint/go-arg"
 )
 
+type InterfacePackage struct {
+	Name string `arg:"-n,--interface-package-name" help:""package name of the target interface source code file"`
+	Path string `arg:"-l,--interface-package-path" help:""package name of the target interface source code file"`
+}
+
 type Arguments struct {
-	Target string `arg:"-t,--target" help:"target interface source code file"`
-	Output string `arg:"-o,--output" help:"output file path. default is current directory"`
-	Suffix string `arg:"-s,--suffix" help:"suffix for the generated code. default is '_proxy.go'"`
+	InterfacePackage
+	Target  string `arg:"-t,--target" help:"target interface source code file"`
+	Output  string `arg:"-o,--output" help:"output file path. default is current directory"`
+	Suffix  string `arg:"-s,--suffix" help:"suffix for the generated code. default is '_proxy.go'"`
+	Pakcage string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
 }
 
 func NewArguments() Arguments {

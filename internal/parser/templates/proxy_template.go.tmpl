@@ -1,0 +1,52 @@
+﻿// proxy_template.go.tmpl
+package {{.PackageName}}
+
+import (
+    "database/sql"
+
+    {{range .Imports}}
+    {{.Alias}} "{{.Path}}"
+    {{end}}
+)
+
+{{range .Interfaces}}
+
+type {{.ProxyTypeName}}Transaction func() *sql.Tx
+
+type {{.ProxyTypeName}} struct {
+    target {{.InterfaceName}}
+    db {{.ProxyTypeName}}DBGetter
+}
+
+func New{{.ProxyTypeName}}(target {{.InterfaceName}}, db {{.ProxyTypeName}}DBGetter) *{{.ProxyTypeName}} {
+    return &{{.ProxyTypeName}}{
+        target: target,
+        db: db,
+    }
+}
+
+{{range .Methods}}
+func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.Results}} {
+    db := p.db()
+    tx, err := db.Begin()
+    if err != nil {
+        panic(err)
+    }
+
+    {{if .IsTransaction}}
+        {{if .HasResults}}{{.ResultVars}} := {{end}}p.target.{{.Name}}({{.ParamNames}})
+        if err != nil {
+            tx.Rollback()
+        } else {
+            tx.Commit()
+        }
+
+        {{if .HasResults}}
+            return {{.ResultVars}}
+        {{end}}
+    {{else}}
+        return p.target.{{.Name}}({{.ParamNames}})
+    {{end}}
+}
+{{end}}
+{{end}}

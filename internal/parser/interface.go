@@ -20,31 +20,63 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package parser
 
 import (
-	"github.com/ISSuh/simple-gen-proxy/internal/option"
-	"github.com/ISSuh/simple-gen-proxy/internal/parser"
+	"go/ast"
 )
 
-type Import struct {
-	Alias string
-	Path  string
+const (
+	proxySuffix = "Proxy"
+)
+
+type Interface struct {
+	ProxyTypeName string
+	InterfaceName string
+	Methods       []Method
+	types         *ast.InterfaceType
 }
 
-func main() {
-	arg := option.NewArguments()
-	if err := arg.Validate(); err != nil {
-		panic(err)
-	}
-
-	g := parser.NewGenerator()
-	data, err := g.Parse(arg.Target, arg.Name, arg.InterfacePackage.Name, arg.InterfacePackage.Path)
+func ParseInterface(node *ast.File) ([]Interface, error) {
+	interfaces, err := parseInterfaceType(node)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	if err := g.Generate(arg.Output, data); err != nil {
-		panic(err)
+	for i, iface := range interfaces {
+		interfaces[i].ProxyTypeName = interfaces[i].InterfaceName + proxySuffix
+		m, err := parseMethod(interfaces[i].ProxyTypeName, iface.types)
+		if err != nil {
+			return nil, err
+		}
+
+		interfaces[i].Methods = append(interfaces[i].Methods, m...)
 	}
+
+	return interfaces, nil
+}
+
+func parseInterfaceType(node *ast.File) ([]Interface, error) {
+	interfaces := []Interface{}
+	ast.Inspect(node, func(n ast.Node) bool {
+		spec, ok := n.(*ast.TypeSpec)
+		if !ok {
+			return true
+		}
+
+		iface, ok := spec.Type.(*ast.InterfaceType)
+		if !ok {
+			return true
+		}
+
+		i := Interface{
+			types:         iface,
+			InterfaceName: spec.Name.Name,
+		}
+
+		interfaces = append(interfaces, i)
+		return true
+	})
+
+	return interfaces, nil
 }

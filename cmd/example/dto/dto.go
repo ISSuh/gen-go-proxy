@@ -20,31 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package dto
 
-import (
-	"github.com/ISSuh/simple-gen-proxy/internal/option"
-	"github.com/ISSuh/simple-gen-proxy/internal/parser"
-)
-
-type Import struct {
-	Alias string
-	Path  string
-}
-
-func main() {
-	arg := option.NewArguments()
-	if err := arg.Validate(); err != nil {
-		panic(err)
-	}
-
-	g := parser.NewGenerator()
-	data, err := g.Parse(arg.Target, arg.Name, arg.InterfacePackage.Name, arg.InterfacePackage.Path)
-	if err != nil {
-		panic(err)
-	}
-
-	if err := g.Generate(arg.Output, data); err != nil {
-		panic(err)
-	}
+type ADTO struct {
+	id int
 }

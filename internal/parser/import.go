@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package parser
 
 import (
-	"github.com/ISSuh/simple-gen-proxy/internal/option"
-	"github.com/ISSuh/simple-gen-proxy/internal/parser"
+	"go/ast"
+	"strings"
 )
 
 type Import struct {
@@ -32,19 +32,28 @@ type Import struct {
 	Path  string
 }
 
-func main() {
-	arg := option.NewArguments()
-	if err := arg.Validate(); err != nil {
-		panic(err)
+func ParseImportPackage(node *ast.File) ([]Import, error) {
+	imports := []Import{}
+	f := func(n ast.Node) bool {
+		spec, ok := n.(*ast.ImportSpec)
+		if !ok {
+			return true
+		}
+
+		alias := ""
+		if spec.Name != nil {
+			alias = spec.Name.Name
+		}
+
+		i := Import{
+			Alias: alias,
+			Path:  strings.Trim(spec.Path.Value, "\""),
+		}
+
+		imports = append(imports, i)
+		return false
 	}
 
-	g := parser.NewGenerator()
-	data, err := g.Parse(arg.Target, arg.Name, arg.InterfacePackage.Name, arg.InterfacePackage.Path)
-	if err != nil {
-		panic(err)
-	}
-
-	if err := g.Generate(arg.Output, data); err != nil {
-		panic(err)
-	}
+	ast.Inspect(node, f)
+	return imports, nil
 }

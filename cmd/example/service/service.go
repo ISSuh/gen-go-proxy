@@ -25,14 +25,38 @@ package service
 import (
 	"context"
 
+	"github.com/ISSuh/simple-gen-proxy/cmd/example/dto"
 	entity "github.com/ISSuh/simple-gen-proxy/cmd/example/entity"
 )
 
 type Foo interface {
-	CreateA(c context.Context, id int) (*entity.A, error)
+	// @transactional
+	CreateA(c context.Context, id int, dto dto.ADTO) (*entity.A, error)
+
+	// @transactional
 	CreateB(c context.Context, id int) (*entity.B, error)
+
 	Barz(c context.Context, id int) (*entity.A, *entity.B, error)
+
+	// @transactional
 	Foos(c context.Context, a *entity.A, b *entity.B) error
+
+	FoosBarz(c context.Context)
+}
+
+type Bar interface {
+	// @transactional
+	CreateC(c context.Context, id int) (*entity.A, error)
+
+	// @transactional
+	CreateD(c context.Context, id int) (*entity.B, error)
+
+	CBarz(c context.Context, id int) (*entity.A, *entity.B, error)
+
+	// @transactional
+	BFoos(c context.Context, a *entity.A, b *entity.B) error
+
+	QFoosBarz(c context.Context)
 }
 
 type FooService struct{}
