@@ -1,5 +1,15 @@
 # gen-tx-proxy
 
+## Description
+Simple Gen Proxy is a tool for generating proxy source code files for interfaces within Go source code files. It simplifies the creation and management of proxy code, making it easier for developers to implement proxy patterns in their Go applications.
+
+## Installation
+To install Simple Gen Proxy, use the following command:
+
+```bash
+go get github.com/ISSuh/gen-tx-proxy
+```
+
 ## Usage
 ```bash
 $ gen-tx-proxy --help
@@ -19,6 +29,7 @@ Options:
   --help, -h             display this help and exit
 ```
 
+
 ```bash
 # generate proxy to same directory
 gen-tx-proxy -t cmd/example/service/foo.go
@@ -26,3 +37,26 @@ gen-tx-proxy -t cmd/example/service/foo.go
 # generate proxy to other directory and has custom package name
 gen-tx-proxy -t ./example/service/bar.go -o ./example/service/proxy -p proxy -n service -l github.com/ISSuh/simple-gen-proxy/example/service
 ```
+
+## example
+
+implement interface of service layer
+
+```go
+package service
+
+type Foo interface {
+    // add the @transactionl comments to the method you want to apply the transaction
+    // @transactionl
+    Create(email string) (int64, error)
+
+    // If there is no comment @transactionl,
+    // the method calls the function immediately without the transaction being applied
+    Find(id int64) (string, error)
+}
+```
+
+
+
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
