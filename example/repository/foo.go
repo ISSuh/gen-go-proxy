@@ -20,35 +20,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package option
+package repository
 
 import (
-	"errors"
-
-	"github.com/alexflint/go-arg"
+	"database/sql"
+	"fmt"
 )
 
-type InterfacePackage struct {
-	Name string `arg:"-n,--interface-package-name" help:"package name of the target interface source code file"`
-	Path string `arg:"-l,--interface-package-path" help:"package path of the target interface source code file"`
+type Foo interface {
+	Create(id int64) error
 }
 
-type Arguments struct {
-	InterfacePackage
-	Target  string `arg:"required,-t,--target" help:"target interface source code file. is required"`
-	Output  string `arg:"-o,--output" help:"output file path. default is the same as the target interface source code file"`
-	Pakcage string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
+type fooRepository struct {
+	db *sql.DB
 }
 
-func NewArguments() Arguments {
-	a := Arguments{}
-	arg.MustParse(&a)
-	return a
+func NewFooRepository(db *sql.DB) *fooRepository {
+	return &fooRepository{}
 }
 
-func (a *Arguments) Validate() error {
-	if a.Target == "" {
-		return errors.New("target interface source code file is empty")
+func (r *fooRepository) Create(id int64) error {
+	query := fmt.Sprintf("INSERT INTO foo_table (id) VALUES (%d)", id)
+	_, err := r.db.Exec(query)
+	if err != nil {
+		return err
 	}
 	return nil
 }

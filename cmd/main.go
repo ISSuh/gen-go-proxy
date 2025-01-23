@@ -20,35 +20,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package option
+package main
 
 import (
-	"errors"
-
-	"github.com/alexflint/go-arg"
+	"github.com/ISSuh/simple-gen-proxy/internal/option"
+	"github.com/ISSuh/simple-gen-proxy/internal/parser"
 )
 
-type InterfacePackage struct {
-	Name string `arg:"-n,--interface-package-name" help:"package name of the target interface source code file"`
-	Path string `arg:"-l,--interface-package-path" help:"package path of the target interface source code file"`
+type Import struct {
+	Alias string
+	Path  string
 }
 
-type Arguments struct {
-	InterfacePackage
-	Target  string `arg:"required,-t,--target" help:"target interface source code file. is required"`
-	Output  string `arg:"-o,--output" help:"output file path. default is the same as the target interface source code file"`
-	Pakcage string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
-}
-
-func NewArguments() Arguments {
-	a := Arguments{}
-	arg.MustParse(&a)
-	return a
-}
-
-func (a *Arguments) Validate() error {
-	if a.Target == "" {
-		return errors.New("target interface source code file is empty")
+func main() {
+	args := option.NewArguments()
+	if err := args.Validate(); err != nil {
+		panic(err)
 	}
-	return nil
+
+	g := parser.NewGenerator()
+	data, err := g.Parse(args)
+	if err != nil {
+		panic(err)
+	}
+
+	if err := g.Generate(args.Output, data); err != nil {
+		panic(err)
+	}
 }

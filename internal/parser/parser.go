@@ -26,26 +26,44 @@ import (
 	"bytes"
 	"embed"
 	_ "embed"
+	"errors"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
 	"html/template"
 	"os"
+	"path/filepath"
+
+	"github.com/ISSuh/simple-gen-proxy/internal/option"
+	"golang.org/x/tools/imports"
+)
+
+const (
+	proxyFileoutFilePathSuffix = "_proxy"
+	sourceFIleExtention        = ".go"
+	embedTemplatePath          = "templates/*.tmpl"
 )
 
 //go:embed templates/*.tmpl
 var templateFiles embed.FS
 
 type TemplateData struct {
+	SourceFile  string
 	PackageName string
 	Imports     []Import
 	Interfaces  []Interface
 }
 
+type Proxy struct {
+	FileName     string
+	FilePath     string
+	TemplateData *TemplateData
+}
+
 type Generator struct {
 	fset *token.FileSet
-	node *ast.File
 }
 
 func NewGenerator() *Generator {
@@ -54,66 +72,103 @@ func NewGenerator() *Generator {
 	}
 }
 
-func (g *Generator) Parse(path, packageName, interfacePakageName, interfacePakagePath string) (*TemplateData, error) {
-	node, err := parser.ParseFile(g.fset, path, nil, parser.ParseComments)
+func (g *Generator) Parse(args option.Arguments) (Proxy, error) {
+	node, err := parser.ParseFile(g.fset, args.Target, nil, parser.ParseComments)
 	if err != nil {
-		return nil, err
+		return Proxy{}, err
 	}
 
-	g.node = node
+	imports, err := g.paseImport(node, args.InterfacePackage.Name, args.InterfacePackage.Path)
+	if err != nil {
+		return Proxy{}, err
+	}
 
+	packageName := node.Name.Name
+	isDiffrentPackage := false
+	if args.Pakcage != "" {
+		packageName = args.Pakcage
+		isDiffrentPackage = true
+	}
+
+	iface, err := ParseInterface(node, isDiffrentPackage)
+	if err != nil {
+		return Proxy{}, err
+	}
+
+	filePath, fileName, err := separateFileNameFromPath(args.Target)
+	if err != nil {
+		return Proxy{}, err
+	}
+
+	proxy := Proxy{
+		FileName: fileName + proxyFileoutFilePathSuffix + sourceFIleExtention,
+		FilePath: filePath,
+		TemplateData: &TemplateData{
+			SourceFile:  args.Target,
+			PackageName: packageName,
+			Imports:     imports,
+			Interfaces:  iface,
+		},
+	}
+	return proxy, nil
+}
+
+func (g *Generator) paseImport(node *ast.File, interfacePackageName, interfacePackagePath string) ([]Import, error) {
 	imports, err := ParseImportPackage(node)
 	if err != nil {
 		return nil, err
 	}
 
-	if interfacePakageName != "" && interfacePakagePath != "" {
+	if interfacePackageName != "" && interfacePackagePath != "" {
 		imports = append(imports, Import{
-			Alias: interfacePakageName,
-			Path:  interfacePakagePath,
+			Alias: interfacePackageName,
+			Path:  interfacePackagePath,
 		})
 	}
 
-	iface, err := ParseInterface(node)
-	if err != nil {
-		return nil, err
-	}
-
-	name := packageName
-	if packageName == "" {
-		name = node.Name.Name
-	}
-
-	data := &TemplateData{
-		PackageName: name,
-		Imports:     imports,
-		Interfaces:  iface,
-	}
-	return data, nil
+	return imports, nil
 }
 
-func (g *Generator) Generate(outPath string, data *TemplateData) error {
-	tmpl, err := template.ParseFS(templateFiles, "templates/*.tmpl")
+func (g *Generator) Generate(outPath string, data Proxy) error {
+	tmpl, err := template.ParseFS(templateFiles, embedTemplatePath)
 	if err != nil {
 		panic(err)
 	}
-	file, err := os.Create(outPath)
+
+	outDirPath := outPath
+	if outDirPath == "" {
+		outDirPath = filepath.Join(data.FilePath, data.FileName)
+	}
+
+	// create file
+	outFilePath := filepath.Join(outDirPath, data.FileName)
+	file, err := os.Create(outFilePath)
 	if err != nil {
+		err = errors.Join(fmt.Errorf("failed to create file(%s)", outFilePath), err)
 		panic(err)
 	}
 	defer file.Close()
 
+	// generate code from template
 	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, data)
+	err = tmpl.Execute(&buf, data.TemplateData)
 	if err != nil {
 		return err
 	}
 
-	code, err := format.Source(buf.Bytes())
+	// format code
+	format, err := format.Source(buf.Bytes())
 	if err != nil {
 		return err
 	}
 
+	// remove unused imports
+	code, err := imports.Process("", format, nil)
+	if err != nil {
+		return err
+	}
+
+	// write code to file
 	if _, err := file.Write(code); err != nil {
 		return err
 	}
@@ -123,4 +178,23 @@ func (g *Generator) Generate(outPath string, data *TemplateData) error {
 	}
 
 	return nil
+}
+
+func separateFileNameFromPath(path string) (string, string, error) {
+	if filepath.Ext(path) != sourceFIleExtention {
+		return "", "", errors.New("file is not go source file")
+	}
+
+	filePath := filepath.Dir(path)
+	if filePath == "" {
+		return "", "", errors.New("file path is empty")
+	}
+
+	fileName := filepath.Base(path)
+	if fileName == "" {
+		return "", "", errors.New("file name is empty")
+	}
+
+	name := fileName[:len(fileName)-len(sourceFIleExtention)]
+	return filePath, name, nil
 }

@@ -31,14 +31,16 @@ const (
 )
 
 type Interface struct {
-	ProxyTypeName string
-	InterfaceName string
-	Methods       []Method
-	types         *ast.InterfaceType
+	ProxyTypeName     string
+	InterfaceName     string
+	InterfacePakcage  string
+	IsDiffrentPackage bool
+	Methods           []Method
+	types             *ast.InterfaceType
 }
 
-func ParseInterface(node *ast.File) ([]Interface, error) {
-	interfaces, err := parseInterfaceType(node)
+func ParseInterface(node *ast.File, isDiffrentPackage bool) ([]Interface, error) {
+	interfaces, err := parseInterfaceType(node, isDiffrentPackage)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +58,7 @@ func ParseInterface(node *ast.File) ([]Interface, error) {
 	return interfaces, nil
 }
 
-func parseInterfaceType(node *ast.File) ([]Interface, error) {
+func parseInterfaceType(node *ast.File, isDiffrentPackage bool) ([]Interface, error) {
 	interfaces := []Interface{}
 	ast.Inspect(node, func(n ast.Node) bool {
 		spec, ok := n.(*ast.TypeSpec)
@@ -70,8 +72,10 @@ func parseInterfaceType(node *ast.File) ([]Interface, error) {
 		}
 
 		i := Interface{
-			types:         iface,
-			InterfaceName: spec.Name.Name,
+			types:             iface,
+			InterfaceName:     spec.Name.Name,
+			InterfacePakcage:  node.Name.Name,
+			IsDiffrentPackage: isDiffrentPackage,
 		}
 
 		interfaces = append(interfaces, i)

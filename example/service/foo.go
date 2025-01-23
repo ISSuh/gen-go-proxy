@@ -24,9 +24,11 @@ package service
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/cmd/example/dto"
-	entity "github.com/ISSuh/simple-gen-proxy/cmd/example/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/dto"
+	entity "github.com/ISSuh/simple-gen-proxy/example/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/repository"
 )
 
 type Foo interface {
@@ -44,39 +46,36 @@ type Foo interface {
 	FoosBarz(c context.Context)
 }
 
-type Bar interface {
-	// @transactional
-	CreateC(c context.Context, id int) (*entity.A, error)
-
-	// @transactional
-	CreateD(c context.Context, id int) (*entity.B, error)
-
-	CBarz(c context.Context, id int) (*entity.A, *entity.B, error)
-
-	// @transactional
-	BFoos(c context.Context, a *entity.A, b *entity.B) error
-
-	QFoosBarz(c context.Context)
+type FooService struct {
+	repo repository.Foo
 }
 
-type FooService struct{}
-
-func NewFooService() Foo {
-	return &FooService{}
+func NewFooService(repo repository.Foo) Foo {
+	return &FooService{
+		repo: repo,
+	}
 }
 
-func (s *FooService) CreateA(c context.Context, id int) (*entity.A, error) {
+func (s *FooService) CreateA(c context.Context, id int, dto dto.ADTO) (*entity.A, error) {
+	fmt.Printf("CreateA\n")
 	return &entity.A{}, nil
 }
 
 func (s *FooService) CreateB(c context.Context, id int) (*entity.B, error) {
+	fmt.Printf("CreateB\n")
 	return &entity.B{}, nil
 }
 
 func (s *FooService) Barz(c context.Context, id int) (*entity.A, *entity.B, error) {
+	fmt.Printf("Barz\n")
 	return &entity.A{}, &entity.B{}, nil
 }
 
 func (s *FooService) Foos(c context.Context, a *entity.A, b *entity.B) error {
+	fmt.Printf("Foos\n")
 	return nil
+}
+
+func (s *FooService) FoosBarz(c context.Context) {
+	fmt.Printf("FoosBarz\n")
 }

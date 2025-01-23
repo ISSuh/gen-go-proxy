@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 
 // Copyright (c) 2025 ISSuh
 
@@ -20,35 +20,54 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package option
+package service
 
 import (
-	"errors"
+	"context"
 
-	"github.com/alexflint/go-arg"
+	entity "github.com/ISSuh/simple-gen-proxy/example/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/repository"
 )
 
-type InterfacePackage struct {
-	Name string `arg:"-n,--interface-package-name" help:"package name of the target interface source code file"`
-	Path string `arg:"-l,--interface-package-path" help:"package path of the target interface source code file"`
+type Bar interface {
+	// @transactional
+	CreateC(c context.Context, id int) (*entity.A, error)
+
+	// @transactional
+	CreateD(c context.Context, id int) (*entity.B, error)
+
+	CBarz(c context.Context, id int) (*entity.A, *entity.B, error)
+
+	// @transactional
+	BFoos(c context.Context, a *entity.A, b *entity.B) error
+
+	QFoosBarz(c context.Context)
 }
 
-type Arguments struct {
-	InterfacePackage
-	Target  string `arg:"required,-t,--target" help:"target interface source code file. is required"`
-	Output  string `arg:"-o,--output" help:"output file path. default is the same as the target interface source code file"`
-	Pakcage string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
+type BarService struct {
+	repo repository.Bar
 }
 
-func NewArguments() Arguments {
-	a := Arguments{}
-	arg.MustParse(&a)
-	return a
-}
-
-func (a *Arguments) Validate() error {
-	if a.Target == "" {
-		return errors.New("target interface source code file is empty")
+func NewBarService(repo repository.Bar) Bar {
+	return &BarService{
+		repo: repo,
 	}
+}
+
+func (s *BarService) CreateC(c context.Context, id int) (*entity.A, error) {
+	return &entity.A{}, nil
+}
+
+func (s *BarService) CreateD(c context.Context, id int) (*entity.B, error) {
+	return &entity.B{}, nil
+}
+
+func (s *BarService) CBarz(c context.Context, id int) (*entity.A, *entity.B, error) {
+	return &entity.A{}, &entity.B{}, nil
+}
+
+func (s *BarService) BFoos(c context.Context, a *entity.A, b *entity.B) error {
 	return nil
 }
+
+func (s *BarService) QFoosBarz(c context.Context) {}

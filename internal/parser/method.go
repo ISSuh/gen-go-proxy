@@ -33,6 +33,11 @@ const (
 	errorType          = "error"
 )
 
+type Result struct {
+	ResultType string
+	ResultVar  string
+}
+
 type Method struct {
 	ProxyTypeName string
 	Name          string
@@ -40,6 +45,7 @@ type Method struct {
 	ParamNames    string
 	Results       string
 	ResultVars    string
+	Result        []Result
 	HasResults    bool
 	IsTransaction bool
 	HasError      bool
@@ -60,7 +66,7 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 
 		isTransaction := isTransactionMethod(method)
 		params, paramNames := parseMethodParams(funcType)
-		results, resultVars, hasError := parseMethodResults(funcType)
+		results, resultVars, resultsSli, hasError := parseMethodResults(funcType)
 
 		m := Method{
 			ProxyTypeName: proxyTypeName,
@@ -70,6 +76,7 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 			ParamNames:    paramNames,
 			Results:       results,
 			ResultVars:    resultVars,
+			Result:        resultsSli,
 			HasResults:    len(results) > 0,
 			HasError:      hasError,
 		}
@@ -101,7 +108,8 @@ func parseMethodParams(funcType *ast.FuncType) (string, string) {
 	return paramStr, paramNameStr
 }
 
-func parseMethodResults(funcType *ast.FuncType) (string, string, bool) {
+func parseMethodResults(funcType *ast.FuncType) (string, string, []Result, bool) {
+	resultSli := []Result{}
 	results := []string{}
 	resultVars := []string{}
 	hasError := false
@@ -113,16 +121,18 @@ func parseMethodResults(funcType *ast.FuncType) (string, string, bool) {
 			vars := fmt.Sprintf("r%d", i)
 			if resultType == errorType {
 				hasError = true
+				// vars = fmt.Sprintf("err%d", i)
 				vars = "err"
 			}
 
+			resultSli = append(resultSli, Result{ResultType: resultType, ResultVar: vars})
 			resultVars = append(resultVars, vars)
 		}
 	}
 
 	resultStr := formatResults(results)
 	resultVarStr := strings.Join(resultVars, ", ")
-	return resultStr, resultVarStr, hasError
+	return resultStr, resultVarStr, resultSli, hasError
 }
 
 func exprToString(expr ast.Expr) string {

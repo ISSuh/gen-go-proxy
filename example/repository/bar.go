@@ -20,31 +20,32 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package repository
 
 import (
-	"github.com/ISSuh/simple-gen-proxy/internal/option"
-	"github.com/ISSuh/simple-gen-proxy/internal/parser"
+	"database/sql"
+	"fmt"
 )
 
-type Import struct {
-	Alias string
-	Path  string
+type Bar interface {
+	Create(id int64) error
 }
 
-func main() {
-	arg := option.NewArguments()
-	if err := arg.Validate(); err != nil {
-		panic(err)
-	}
+type barRepository struct {
+	db *sql.DB
+}
 
-	g := parser.NewGenerator()
-	data, err := g.Parse(arg.Target, arg.Name, arg.InterfacePackage.Name, arg.InterfacePackage.Path)
+func NewBarRepository(db *sql.DB) *barRepository {
+	return &barRepository{
+		db: db,
+	}
+}
+
+func (r *barRepository) Create(id int64) error {
+	query := fmt.Sprintf("INSERT INTO bar_table (id) VALUES (%d)", id)
+	_, err := r.db.Exec(query)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	if err := g.Generate(arg.Output, data); err != nil {
-		panic(err)
-	}
+	return nil
 }
