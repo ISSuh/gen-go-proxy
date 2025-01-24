@@ -33,15 +33,15 @@ import (
 
 type Foo interface {
 	// @transactional
-	CreateA(c context.Context, id int, dto dto.ADTO) (*entity.A, error)
+	CreateA(c context.Context, id int, dto dto.ADTO) (*entity.Foo, error)
 
 	// @transactional
-	CreateB(c context.Context, id int) (*entity.B, error)
+	CreateB(c context.Context, id int) (*entity.Bar, error)
 
-	Barz(c context.Context, id int) (*entity.A, *entity.B, error)
+	Barz(c context.Context, id int) (*entity.Foo, *entity.Bar, error)
 
 	// @transactional
-	Foos(c context.Context, a *entity.A, b *entity.B) error
+	Foos(c context.Context, a *entity.Foo, b *entity.Bar) error
 
 	FoosBarz(c context.Context)
 }
@@ -56,22 +56,24 @@ func NewFooService(repo repository.Foo) Foo {
 	}
 }
 
-func (s *FooService) CreateA(c context.Context, id int, dto dto.ADTO) (*entity.A, error) {
+func (s *FooService) CreateA(c context.Context, id int, dto dto.ADTO) (*entity.Foo, error) {
 	fmt.Printf("CreateA\n")
-	return &entity.A{}, nil
+	return &entity.Foo{}, nil
 }
 
-func (s *FooService) CreateB(c context.Context, id int) (*entity.B, error) {
+func (s *FooService) CreateB(c context.Context, id int) (*entity.Bar, error) {
 	fmt.Printf("CreateB\n")
-	return &entity.B{}, nil
+	s.repo.Create(int64(id))
+	return &entity.Bar{}, nil
 }
 
-func (s *FooService) Barz(c context.Context, id int) (*entity.A, *entity.B, error) {
+func (s *FooService) Barz(c context.Context, id int) (*entity.Foo, *entity.Bar, error) {
 	fmt.Printf("Barz\n")
-	return &entity.A{}, &entity.B{}, nil
+	s.repo.Find(id)
+	return &entity.Foo{}, &entity.Bar{}, nil
 }
 
-func (s *FooService) Foos(c context.Context, a *entity.A, b *entity.B) error {
+func (s *FooService) Foos(c context.Context, a *entity.Foo, b *entity.Bar) error {
 	fmt.Printf("Foos\n")
 	return nil
 }

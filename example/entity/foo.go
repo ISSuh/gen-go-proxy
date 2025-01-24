@@ -22,6 +22,7 @@
 
 package entity
 
-type B struct {
-	id int
+type Foo struct {
+	ID    int `gorm:"primaryKey"`
+	Value int `gorm:"column:value"`
 }

@@ -23,27 +23,60 @@
 package repository
 
 import (
-	"database/sql"
-	"fmt"
+	"github.com/ISSuh/simple-gen-proxy/example/entity"
+	"gorm.io/gorm"
 )
 
 type Foo interface {
-	Create(id int64) error
+	Create(value int64) error
+	Find(id int) (*entity.Foo, error)
 }
 
 type fooRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewFooRepository(db *sql.DB) *fooRepository {
-	return &fooRepository{}
+func NewFooRepository(db *gorm.DB) *fooRepository {
+	return &fooRepository{
+		db: db,
+	}
 }
 
-func (r *fooRepository) Create(id int64) error {
-	query := fmt.Sprintf("INSERT INTO foo_table (id) VALUES (%d)", id)
-	_, err := r.db.Exec(query)
-	if err != nil {
+func (r *fooRepository) Create(value int64) error {
+	f := &entity.Foo{
+		Value: int(value),
+	}
+
+	if err := r.db.Create(f).Error; err != nil {
 		return err
 	}
 	return nil
+}
+
+func (r *fooRepository) Find(id int) (*entity.Foo, error) {
+	f := &entity.Foo{}
+	if err := r.db.Where("id = ?", id).First(f).Error; err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func (r *fooRepository) RunRX(f func() error) {
+	db, err := r.db.DB()
+	if err != nil {
+		panic(err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		panic(err)
+	}
+
+	if err := f(); err != nil {
+		tx.Rollback()
+		return
+	}
+
+	tx.Commit()
+	return
 }

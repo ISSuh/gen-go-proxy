@@ -23,17 +23,66 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"log"
 	"net/http"
+	"time"
 
+	"github.com/ISSuh/simple-gen-proxy/example/entity"
 	"github.com/ISSuh/simple-gen-proxy/example/repository"
 	"github.com/ISSuh/simple-gen-proxy/example/service"
 	"github.com/ISSuh/simple-gen-proxy/example/service/proxy"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func openDB() (*sql.DB, error) {
-	db, err := sql.Open("mysql", "root:pwd@tcp(127.0.0.1:3306)/testdb")
+type CustomLogger struct {
+	logger.Interface
+}
+
+func (c CustomLogger) Info(ctx context.Context, msg string, data ...interface{}) {
+	log.Printf("[INFO] "+msg, data...)
+}
+
+func (c CustomLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
+	log.Printf("[WARN] "+msg, data...)
+}
+
+func (c CustomLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+	log.Printf("[ERROR] "+msg, data...)
+}
+
+func (c CustomLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	elapsed := time.Since(begin)
+	sql, rows := fc()
+	log.Printf("[TRACE] %s [%.2fms] [rows:%v] %s", sql, float64(elapsed.Nanoseconds())/1e6, rows, err)
+}
+
+func createTestDB(db *gorm.DB) error {
+	err := db.AutoMigrate(&entity.Foo{}, &entity.Bar{})
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func openDB() (*gorm.DB, error) {
+	dsn := "root:1@tcp(127.0.0.1:33551)/TESTDB"
+
+	config := &gorm.Config{
+		Logger: CustomLogger{},
+		// Logger: logger.Default.LogMode(logger.Info),
+	}
+
+	db, err := gorm.Open(mysql.Open(dsn), config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := createTestDB(db); err != nil {
 		return nil, err
 	}
 	return db, nil
@@ -55,7 +104,12 @@ func (s *Server) init() error {
 	}
 
 	f := func() *sql.DB {
-		return db
+		rawDB, err := db.DB()
+		if err != nil {
+			return nil
+		}
+
+		return rawDB
 	}
 
 	fooRepo := repository.NewFooRepository(db)
@@ -66,6 +120,9 @@ func (s *Server) init() error {
 	barService := service.NewBarService(barRepo)
 	s.bar = proxy.NewBarProxy(barService, f)
 
+	s.foo.Barz(context.Background(), 1)
+
+	s.foo.CreateB(context.Background(), 100)
 	return nil
 }
 

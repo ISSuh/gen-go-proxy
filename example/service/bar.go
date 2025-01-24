@@ -31,15 +31,15 @@ import (
 
 type Bar interface {
 	// @transactional
-	CreateC(c context.Context, id int) (*entity.A, error)
+	CreateC(c context.Context, id int) (*entity.Foo, error)
 
 	// @transactional
-	CreateD(c context.Context, id int) (*entity.B, error)
+	CreateD(c context.Context, id int) (*entity.Bar, error)
 
-	CBarz(c context.Context, id int) (*entity.A, *entity.B, error)
+	CBarz(c context.Context, id int) (*entity.Foo, *entity.Bar, error)
 
 	// @transactional
-	BFoos(c context.Context, a *entity.A, b *entity.B) error
+	BFoos(c context.Context, a *entity.Foo, b *entity.Bar) error
 
 	QFoosBarz(c context.Context)
 }
@@ -54,19 +54,19 @@ func NewBarService(repo repository.Bar) Bar {
 	}
 }
 
-func (s *BarService) CreateC(c context.Context, id int) (*entity.A, error) {
-	return &entity.A{}, nil
+func (s *BarService) CreateC(c context.Context, id int) (*entity.Foo, error) {
+	return &entity.Foo{}, nil
 }
 
-func (s *BarService) CreateD(c context.Context, id int) (*entity.B, error) {
-	return &entity.B{}, nil
+func (s *BarService) CreateD(c context.Context, id int) (*entity.Bar, error) {
+	return &entity.Bar{}, nil
 }
 
-func (s *BarService) CBarz(c context.Context, id int) (*entity.A, *entity.B, error) {
-	return &entity.A{}, &entity.B{}, nil
+func (s *BarService) CBarz(c context.Context, id int) (*entity.Foo, *entity.Bar, error) {
+	return &entity.Foo{}, &entity.Bar{}, nil
 }
 
-func (s *BarService) BFoos(c context.Context, a *entity.A, b *entity.B) error {
+func (s *BarService) BFoos(c context.Context, a *entity.Foo, b *entity.Bar) error {
 	return nil
 }
 

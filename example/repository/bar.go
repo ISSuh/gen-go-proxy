@@ -23,29 +23,40 @@
 package repository
 
 import (
-	"database/sql"
-	"fmt"
+	"github.com/ISSuh/simple-gen-proxy/example/entity"
+	"gorm.io/gorm"
 )
 
 type Bar interface {
-	Create(id int64) error
+	Create(value int64) error
+	Find(id int) (*entity.Bar, error)
 }
 
 type barRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewBarRepository(db *sql.DB) *barRepository {
+func NewBarRepository(db *gorm.DB) *barRepository {
 	return &barRepository{
 		db: db,
 	}
 }
 
-func (r *barRepository) Create(id int64) error {
-	query := fmt.Sprintf("INSERT INTO bar_table (id) VALUES (%d)", id)
-	_, err := r.db.Exec(query)
-	if err != nil {
+func (r *barRepository) Create(value int64) error {
+	f := &entity.Bar{
+		Value: int(value),
+	}
+
+	if err := r.db.Create(f).Error; err != nil {
 		return err
 	}
 	return nil
+}
+
+func (r *barRepository) Find(id int) (*entity.Bar, error) {
+	f := &entity.Bar{}
+	if err := r.db.Where("id = ?", id).First(f).Error; err != nil {
+		return nil, err
+	}
+	return f, nil
 }
