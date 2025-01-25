@@ -24,7 +24,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -88,35 +87,31 @@ func (s *Server) init() error {
 
 	// init single service
 	// proxy use transactioon helper function on repository
-	fooRepo := repository.NewFooRepository(db)
-	fooService := service.NewFooService(fooRepo)
-	s.foo = proxy.NewFooProxy(fooService, fooRepo.TxHelper)
-
-	barRepo := repository.NewBarRepository(db)
-	barService := service.NewBarService(barRepo)
-	s.bar = proxy.NewBarProxy(barService, barRepo.TxHelper)
-
-	// init aggregate service
-	// aggregateTxHelper is a helper function that wraps the transaction logic.
-	aggregateTxHelper := func(c context.Context, f func(c context.Context) error) {
-		err := db.Transaction(func(tx *gorm.DB) error {
-			requestID, ok := c.Value("requestID").(string)
-			if !ok {
-				return errors.New("requestID not found")
-			}
-
-			txKey := requestID
-			c = context.WithValue(c, txKey, tx)
-			return f(c)
-		})
-
-		if err != nil {
-			panic(err)
-		}
+	fooRepo, err := repository.NewFooRepository(db)
+	if err != nil {
+		return err
 	}
 
-	foobarService := service.NewFooBarService(fooService, barService)
-	s.foobar = proxy.NewFooBarProxy(foobarService, aggregateTxHelper)
+	fooService := service.NewFooService(fooRepo)
+	s.foo = proxy.NewFooProxy(fooService, fooRepo.Transaction())
+
+	barRepo, err := repository.NewBarRepository(db)
+	if err != nil {
+		return err
+	}
+
+	barService := service.NewBarService(barRepo)
+	s.bar = proxy.NewBarProxy(barService, barRepo.Transaction())
+
+	// init aggregate service
+	rawDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	txHelper := repository.NewTxHepler(rawDB)
+	foobarService := service.NewFooBarService(s.foo, s.bar)
+	s.foobar = proxy.NewFooBarProxy(foobarService, txHelper.Transaction())
 
 	return nil
 }

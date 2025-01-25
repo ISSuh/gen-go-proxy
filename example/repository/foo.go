@@ -36,13 +36,21 @@ type Foo interface {
 }
 
 type fooRepository struct {
+	TxHepler
+
 	db *gorm.DB
 }
 
-func NewFooRepository(db *gorm.DB) *fooRepository {
-	return &fooRepository{
-		db: db,
+func NewFooRepository(db *gorm.DB) (*fooRepository, error) {
+	rawDB, err := db.DB()
+	if err != nil {
+		return nil, err
 	}
+
+	return &fooRepository{
+		TxHepler: NewTxHepler(rawDB),
+		db:       db,
+	}, nil
 }
 
 func (r *fooRepository) Create(c context.Context, value int) (int, error) {
@@ -79,21 +87,4 @@ func (r *fooRepository) Find(id int) (*entity.Foo, error) {
 		return nil, err
 	}
 	return f, nil
-}
-
-func (r *fooRepository) TxHelper(c context.Context, f func(c context.Context) error) {
-	err := r.db.Transaction(func(tx *gorm.DB) error {
-		requestID, ok := c.Value("requestID").(string)
-		if !ok {
-			return errors.New("requestID not found")
-		}
-
-		txKey := requestID
-		c = context.WithValue(c, txKey, tx)
-		return f(c)
-	})
-
-	if err != nil {
-		panic(err)
-	}
 }
