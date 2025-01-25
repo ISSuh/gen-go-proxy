@@ -73,6 +73,8 @@ func NewGenerator() *Generator {
 }
 
 func (g *Generator) Parse(args option.Arguments) (Proxy, error) {
+	fmt.Printf("Parsing source file: %s\n", args.Target)
+
 	node, err := parser.ParseFile(g.fset, args.Target, nil, parser.ParseComments)
 	if err != nil {
 		return Proxy{}, err
@@ -137,15 +139,22 @@ func (g *Generator) Generate(outPath string, data Proxy) error {
 
 	outDirPath := outPath
 	if outDirPath == "" {
-		outDirPath = filepath.Join(data.FilePath, data.FileName)
+		outDirPath = data.FilePath
+	}
+
+	outDirPath, err = filepath.Abs(outDirPath)
+	if err != nil {
+		return err
 	}
 
 	// create file
 	outFilePath := filepath.Join(outDirPath, data.FileName)
+	fmt.Printf("Generating proxy file: %s\n", outFilePath)
+
 	file, err := os.Create(outFilePath)
 	if err != nil {
 		err = errors.Join(fmt.Errorf("failed to create file(%s)", outFilePath), err)
-		panic(err)
+		return err
 	}
 	defer file.Close()
 

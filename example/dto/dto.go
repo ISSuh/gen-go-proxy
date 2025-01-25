@@ -22,6 +22,12 @@
 
 package dto
 
-type ADTO struct {
-	id int
+type Foo struct {
+	ID    int
+	Value int
+}
+
+type Bar struct {
+	ID    int
+	Value int
 }

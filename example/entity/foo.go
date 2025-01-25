@@ -22,7 +22,17 @@
 
 package entity
 
+import "fmt"
+
 type Foo struct {
 	ID    int `gorm:"primaryKey"`
 	Value int `gorm:"column:value"`
+}
+
+func (Foo) TableName() string {
+	return "foo"
+}
+
+func (f Foo) String() string {
+	return fmt.Sprintf("[FOO]ID: %d, Value: %d", f.ID, f.Value)
 }

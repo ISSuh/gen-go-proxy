@@ -24,7 +24,7 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/example/service/bar.go",
+                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/example/service/foo.go",
                 "-o", "/home/issuh/workspace/my_project/gen-tx-proxy/example/service/proxy",
                 "-p", "proxy",
                 "-n", "service",
@@ -40,7 +40,7 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/xample/service/foo.go",
+                "-t", "./example/service/foo_bar.go",
 
             ]
         },

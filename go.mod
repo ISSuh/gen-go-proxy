@@ -4,6 +4,7 @@ go 1.23.3
 
 require (
 	github.com/alexflint/go-arg v1.5.1
+	github.com/google/uuid v1.6.0
 	golang.org/x/tools v0.29.0
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12

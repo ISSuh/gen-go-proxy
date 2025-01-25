@@ -23,6 +23,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"strings"
@@ -31,24 +32,96 @@ import (
 const (
 	transactionComment = "@transactional"
 	errorType          = "error"
+	contextType        = "context.Context"
+	userContextParam   = "_userCtx"
+	helperContextParam = "_helperCtx"
 )
+
+type Param struct {
+	Type string
+	Var  string
+}
+
+func (p Param) Format() string {
+	return p.Var + " " + p.Type
+}
+
+type Params []Param
+
+func (p Params) Format() string {
+	formats := []string{}
+	for _, param := range p {
+		formats = append(formats, param.Format())
+	}
+	return strings.Join(formats, ", ")
+}
+
+func (p Params) FormatVars(useHelperContext bool) string {
+	params := []string{}
+	for _, param := range p {
+		if useHelperContext && param.Type == contextType {
+			params = append(params, helperContextParam)
+		} else {
+			params = append(params, param.Var)
+		}
+	}
+	return strings.Join(params, ", ")
+}
 
 type Result struct {
 	ResultType string
 	ResultVar  string
 }
 
+type Results []Result
+
+func (r Results) FormatType() string {
+	if len(r) == 0 {
+		return ""
+	}
+	if len(r) == 1 {
+		return r[0].ResultType
+	}
+
+	results := []string{}
+	for _, result := range r {
+		results = append(results, result.ResultType)
+	}
+
+	return "(" + strings.Join(results, ", ") + ")"
+}
+
+func (r Results) FormatVars() string {
+	vars := []string{}
+	for _, result := range r {
+		vars = append(vars, result.ResultVar)
+	}
+	return strings.Join(vars, ", ")
+}
+
+func (r Results) HasError() bool {
+	for _, result := range r {
+		if result.ResultType == errorType {
+			return true
+		}
+	}
+	return false
+}
+
 type Method struct {
-	ProxyTypeName string
-	Name          string
-	Params        string
-	ParamNames    string
-	Results       string
-	ResultVars    string
-	Result        []Result
-	HasResults    bool
-	IsTransaction bool
-	HasError      bool
+	ProxyTypeName               string
+	Name                        string
+	Params                      string
+	ParamNames                  string
+	ParamNamesWithHelperContext string
+	UserContextParam            string
+	HelperContextParam          string
+	ResultVars                  string
+	ResultTypes                 string
+	Results                     Results
+	HasResults                  bool
+	IsTransaction               bool
+	HasError                    bool
 }
 
 func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, error) {
@@ -65,20 +138,33 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 		}
 
 		isTransaction := isTransactionMethod(method)
-		params, paramNames := parseMethodParams(funcType)
-		results, resultVars, resultsSli, hasError := parseMethodResults(funcType)
+		params, err := parseMethodParams(funcType, isTransaction)
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("failed to parse method params for %s", methodName), err)
+		}
+
+		results, err := parseMethodResults(funcType, isTransaction)
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("failed to parse method results for %s", methodName), err)
+		}
 
 		m := Method{
 			ProxyTypeName: proxyTypeName,
 			Name:          methodName,
 			IsTransaction: isTransaction,
-			Params:        params,
-			ParamNames:    paramNames,
+			Params:        params.Format(),
+			ParamNames:    params.FormatVars(false),
 			Results:       results,
-			ResultVars:    resultVars,
-			Result:        resultsSli,
+			ResultVars:    results.FormatVars(),
+			ResultTypes:   results.FormatType(),
 			HasResults:    len(results) > 0,
-			HasError:      hasError,
+			HasError:      results.HasError(),
+		}
+
+		if isTransaction {
+			m.UserContextParam = userContextParam
+			m.HelperContextParam = helperContextParam
+			m.ParamNamesWithHelperContext = params.FormatVars(true)
 		}
 
 		methods = append(methods, m)
@@ -91,48 +177,69 @@ func isTransactionMethod(method *ast.Field) bool {
 	return method.Doc != nil && strings.Contains(method.Doc.Text(), transactionComment)
 }
 
-func parseMethodParams(funcType *ast.FuncType) (string, string) {
-	params := []string{}
-	paramNames := []string{}
+func parseMethodParams(funcType *ast.FuncType, isTransactional bool) (Params, error) {
+	params := Params{}
+	hasContext := false
 	for _, param := range funcType.Params.List {
 		for _, name := range param.Names {
 			paramName := name.Name
 			paramType := exprToString(param.Type)
-			params = append(params, paramName+" "+paramType)
-			paramNames = append(paramNames, paramName)
+
+			if paramType == contextType {
+				if hasContext {
+					return nil, errors.New("method must have at most one context.Context parameter")
+				}
+
+				hasContext = true
+				paramName = userContextParam
+			}
+
+			p := Param{
+				Type: paramType,
+				Var:  paramName,
+			}
+
+			params = append(params, p)
 		}
 	}
 
-	paramStr := strings.Join(params, ", ")
-	paramNameStr := strings.Join(paramNames, ", ")
-	return paramStr, paramNameStr
+	if isTransactional && !hasContext {
+		return nil, errors.New("transactional method must have a context.Context parameter")
+	}
+
+	return params, nil
 }
 
-func parseMethodResults(funcType *ast.FuncType) (string, string, []Result, bool) {
-	resultSli := []Result{}
-	results := []string{}
-	resultVars := []string{}
+func parseMethodResults(funcType *ast.FuncType, isTransactional bool) (Results, error) {
+	results := Results{}
 	hasError := false
 	if funcType.Results != nil {
 		for i, result := range funcType.Results.List {
 			resultType := exprToString(result.Type)
-			results = append(results, resultType)
-
 			vars := fmt.Sprintf("r%d", i)
 			if resultType == errorType {
+				if hasError {
+					return nil, errors.New("method must have at most one error result")
+				}
+
 				hasError = true
-				// vars = fmt.Sprintf("err%d", i)
 				vars = "err"
 			}
 
-			resultSli = append(resultSli, Result{ResultType: resultType, ResultVar: vars})
-			resultVars = append(resultVars, vars)
+			r := Result{
+				ResultType: resultType,
+				ResultVar:  vars,
+			}
+
+			results = append(results, r)
 		}
 	}
 
-	resultStr := formatResults(results)
-	resultVarStr := strings.Join(resultVars, ", ")
-	return resultStr, resultVarStr, resultSli, hasError
+	if isTransactional && !hasError {
+		return nil, errors.New("transactional method must return an error")
+	}
+
+	return results, nil
 }
 
 func exprToString(expr ast.Expr) string {
@@ -145,21 +252,52 @@ func exprToString(expr ast.Expr) string {
 		return "*" + exprToString(t.X)
 	case *ast.ArrayType:
 		return "[]" + exprToString(t.Elt)
+	case *ast.SliceExpr:
+		return "[]" + exprToString(t.X)
 	case *ast.MapType:
 		return "map[" + exprToString(t.Key) + "]" + exprToString(t.Value)
 	case *ast.FuncType:
+		return exprFuncToString(t)
+	case *ast.FuncLit:
 		return "func" // Simplified for brevity
+	case *ast.Ellipsis:
+		return "..." + exprToString(t.Elt)
+	case *ast.InterfaceType:
+		return "interface{}"
+	case *ast.StructType:
+		return "struct{}"
+	case *ast.ChanType:
+		return "chan " + exprToString(t.Value)
+	case *ast.ParenExpr:
+		return "(" + exprToString(t.X) + ")"
 	default:
 		return ""
 	}
 }
 
-func formatResults(results []string) string {
-	if len(results) == 0 {
-		return ""
+func exprFuncToString(t *ast.FuncType) string {
+	params := []string{}
+	for _, param := range t.Params.List {
+		paramType := exprToString(param.Type)
+		for _, name := range param.Names {
+			params = append(params, name.Name+" "+paramType)
+		}
+		if len(param.Names) == 0 {
+			params = append(params, paramType)
+		}
 	}
-	if len(results) == 1 {
-		return results[0]
+
+	results := []string{}
+	if t.Results != nil {
+		for _, result := range t.Results.List {
+			results = append(results, exprToString(result.Type))
+		}
 	}
-	return "(" + strings.Join(results, ", ") + ")"
+
+	resultFormat := strings.Join(results, ", ")
+	if len(results) > 1 {
+		resultFormat = "(" + resultFormat + ")"
+	}
+
+	return "func(" + strings.Join(params, ", ") + ") " + resultFormat
 }

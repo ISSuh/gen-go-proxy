@@ -24,50 +24,44 @@ package service
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ISSuh/simple-gen-proxy/example/dto"
 	entity "github.com/ISSuh/simple-gen-proxy/example/entity"
 	"github.com/ISSuh/simple-gen-proxy/example/repository"
 )
 
 type Bar interface {
 	// @transactional
-	CreateC(c context.Context, id int) (*entity.Foo, error)
+	Create(c context.Context, dto dto.Bar) (int, error)
 
-	// @transactional
-	CreateD(c context.Context, id int) (*entity.Bar, error)
-
-	CBarz(c context.Context, id int) (*entity.Foo, *entity.Bar, error)
-
-	// @transactional
-	BFoos(c context.Context, a *entity.Foo, b *entity.Bar) error
-
-	QFoosBarz(c context.Context)
+	Find(c context.Context, id int) (*entity.Bar, error)
 }
 
-type BarService struct {
+type barService struct {
 	repo repository.Bar
 }
 
 func NewBarService(repo repository.Bar) Bar {
-	return &BarService{
+	return &barService{
 		repo: repo,
 	}
 }
 
-func (s *BarService) CreateC(c context.Context, id int) (*entity.Foo, error) {
-	return &entity.Foo{}, nil
+func (s *barService) Create(c context.Context, dto dto.Bar) (int, error) {
+	fmt.Printf("[Bar]CreateA\n")
+	id, err := s.repo.Create(c, dto.Value)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
-func (s *BarService) CreateD(c context.Context, id int) (*entity.Bar, error) {
-	return &entity.Bar{}, nil
+func (s *barService) Find(c context.Context, id int) (*entity.Bar, error) {
+	fmt.Printf("[Bar]Find\n")
+	bar, err := s.repo.Find(id)
+	if err != nil {
+		return nil, err
+	}
+	return bar, nil
 }
-
-func (s *BarService) CBarz(c context.Context, id int) (*entity.Foo, *entity.Bar, error) {
-	return &entity.Foo{}, &entity.Bar{}, nil
-}
-
-func (s *BarService) BFoos(c context.Context, a *entity.Foo, b *entity.Bar) error {
-	return nil
-}
-
-func (s *BarService) QFoosBarz(c context.Context) {}

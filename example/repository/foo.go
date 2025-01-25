@@ -23,12 +23,15 @@
 package repository
 
 import (
+	"context"
+	"errors"
+
 	"github.com/ISSuh/simple-gen-proxy/example/entity"
 	"gorm.io/gorm"
 )
 
 type Foo interface {
-	Create(value int64) error
+	Create(c context.Context, value int) (int, error)
 	Find(id int) (*entity.Foo, error)
 }
 
@@ -42,41 +45,55 @@ func NewFooRepository(db *gorm.DB) *fooRepository {
 	}
 }
 
-func (r *fooRepository) Create(value int64) error {
+func (r *fooRepository) Create(c context.Context, value int) (int, error) {
+	requestID, ok := c.Value("requestID").(string)
+	if !ok {
+		return 0, errors.New("requestID not found")
+	}
+
+	txKey := requestID
+	conn, ok := c.Value(txKey).(*gorm.DB)
+	if !ok {
+		return 0, errors.New("transaction not found")
+	}
+
+	if value < 0 {
+		return 0, errors.New("value must be greater than 0")
+	}
+
 	f := &entity.Foo{
 		Value: int(value),
 	}
 
-	if err := r.db.Create(f).Error; err != nil {
-		return err
+	tx := conn.Create(f)
+	if err := tx.Error; err != nil {
+		return 0, err
 	}
-	return nil
+	return f.ID, nil
 }
 
 func (r *fooRepository) Find(id int) (*entity.Foo, error) {
 	f := &entity.Foo{}
-	if err := r.db.Where("id = ?", id).First(f).Error; err != nil {
+	tx := r.db.Where("id = ?", id)
+	if err := tx.First(f).Error; err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
-func (r *fooRepository) RunRX(f func() error) {
-	db, err := r.db.DB()
+func (r *fooRepository) TxHelper(c context.Context, f func(c context.Context) error) {
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		requestID, ok := c.Value("requestID").(string)
+		if !ok {
+			return errors.New("requestID not found")
+		}
+
+		txKey := requestID
+		c = context.WithValue(c, txKey, tx)
+		return f(c)
+	})
+
 	if err != nil {
 		panic(err)
 	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		panic(err)
-	}
-
-	if err := f(); err != nil {
-		tx.Rollback()
-		return
-	}
-
-	tx.Commit()
-	return
 }

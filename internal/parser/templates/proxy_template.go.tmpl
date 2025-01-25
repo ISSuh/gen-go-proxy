@@ -13,46 +13,49 @@ import (
 
 {{range .Interfaces}}
 
-type {{.ProxyTypeName}}Transaction func() *sql.DB
+type {{.ProxyTypeName}}TxHelper func(c context.Context, f func(c context.Context) error)
 
 type {{.ProxyTypeName}} struct {
     target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}
-    db {{.ProxyTypeName}}Transaction
+    tx {{.ProxyTypeName}}TxHelper
 }
 
-func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, db {{.ProxyTypeName}}Transaction) *{{.ProxyTypeName}} {
+func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, tx {{.ProxyTypeName}}TxHelper) *{{.ProxyTypeName}} {
     return &{{.ProxyTypeName}}{
         target: target,
-        db: db,
+        tx: tx,
     }
 }
 
 {{range .Methods}}
-func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.Results}} {
-    {{if .IsTransaction}}
-        db := p.db()
-        tx, txErr := db.Begin()
-        if txErr != nil {
-            panic(txErr)
-        }
-        
-        {{if .HasResults}}{{.ResultVars}} := {{end}}p.target.{{.Name}}({{.ParamNames}})
-        if err != nil {
-            if txErr := tx.Rollback(); txErr != nil {
-                panic(txErr)
-            } 
-        } else {
-            if txErr := tx.Commit(); txErr != nil {
-                panic(txErr)
-            }
-        }
-
-        {{if .HasResults}}
-            return {{.ResultVars}}
+func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
+    {{if .IsTransaction -}}
+        {{if .HasResults -}}
+            var (
+            {{range .Results}}
+                {{.ResultVar}} {{.ResultType -}}
+            {{end}}
+            )
         {{end}}
-    {{else}}
+
+        p.tx({{.UserContextParam}}, func({{.HelperContextParam}} context.Context) error {
+        {{if .HasResults -}}
+            {{.ResultVars}} = p.target.{{.Name}}({{.ParamNamesWithHelperContext}})
+            if err != nil {
+                return err
+            }
+        {{else -}}
+            p.target.{{.Name}}({{.ParamNames}})
+        {{end -}}
+            return nil
+        })
+
+        {{if .HasResults -}}
+            return {{.ResultVars}}
+        {{end -}}
+    {{else -}}
         {{if .HasResults}} return {{end}} p.target.{{.Name}}({{.ParamNames}})
-    {{end}}
+    {{end -}}
 }
 {{end}}
 {{end}}

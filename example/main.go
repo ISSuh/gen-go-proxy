@@ -24,42 +24,22 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"log"
+	"errors"
+	"fmt"
 	"net/http"
-	"time"
+	"strconv"
 
+	"github.com/ISSuh/simple-gen-proxy/example/dto"
 	"github.com/ISSuh/simple-gen-proxy/example/entity"
 	"github.com/ISSuh/simple-gen-proxy/example/repository"
 	"github.com/ISSuh/simple-gen-proxy/example/service"
 	"github.com/ISSuh/simple-gen-proxy/example/service/proxy"
+	"github.com/google/uuid"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-type CustomLogger struct {
-	logger.Interface
-}
-
-func (c CustomLogger) Info(ctx context.Context, msg string, data ...interface{}) {
-	log.Printf("[INFO] "+msg, data...)
-}
-
-func (c CustomLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
-	log.Printf("[WARN] "+msg, data...)
-}
-
-func (c CustomLogger) Error(ctx context.Context, msg string, data ...interface{}) {
-	log.Printf("[ERROR] "+msg, data...)
-}
-
-func (c CustomLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
-	elapsed := time.Since(begin)
-	sql, rows := fc()
-	log.Printf("[TRACE] %s [%.2fms] [rows:%v] %s", sql, float64(elapsed.Nanoseconds())/1e6, rows, err)
-}
 
 func createTestDB(db *gorm.DB) error {
 	err := db.AutoMigrate(&entity.Foo{}, &entity.Bar{})
@@ -73,8 +53,7 @@ func openDB() (*gorm.DB, error) {
 	dsn := "root:1@tcp(127.0.0.1:33551)/TESTDB"
 
 	config := &gorm.Config{
-		Logger: CustomLogger{},
-		// Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Info),
 	}
 
 	db, err := gorm.Open(mysql.Open(dsn), config)
@@ -89,8 +68,12 @@ func openDB() (*gorm.DB, error) {
 }
 
 type Server struct {
+	// single service
 	foo service.Foo
 	bar service.Bar
+
+	// aggregate service
+	foobar service.FooBar
 }
 
 func newServer() *Server {
@@ -103,34 +86,173 @@ func (s *Server) init() error {
 		return err
 	}
 
-	f := func() *sql.DB {
-		rawDB, err := db.DB()
-		if err != nil {
-			return nil
-		}
-
-		return rawDB
-	}
-
+	// init single service
+	// proxy use transactioon helper function on repository
 	fooRepo := repository.NewFooRepository(db)
 	fooService := service.NewFooService(fooRepo)
-	s.foo = proxy.NewFooProxy(fooService, f)
+	s.foo = proxy.NewFooProxy(fooService, fooRepo.TxHelper)
 
 	barRepo := repository.NewBarRepository(db)
 	barService := service.NewBarService(barRepo)
-	s.bar = proxy.NewBarProxy(barService, f)
+	s.bar = proxy.NewBarProxy(barService, barRepo.TxHelper)
 
-	s.foo.Barz(context.Background(), 1)
+	// init aggregate service
+	// aggregateTxHelper is a helper function that wraps the transaction logic.
+	aggregateTxHelper := func(c context.Context, f func(c context.Context) error) {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			requestID, ok := c.Value("requestID").(string)
+			if !ok {
+				return errors.New("requestID not found")
+			}
 
-	s.foo.CreateB(context.Background(), 100)
+			txKey := requestID
+			c = context.WithValue(c, txKey, tx)
+			return f(c)
+		})
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	foobarService := service.NewFooBarService(fooService, barService)
+	s.foobar = proxy.NewFooBarProxy(foobarService, aggregateTxHelper)
+
 	return nil
 }
 
-func (s *Server) Run() {
-	http.HandleFunc("GET /foo", func(w http.ResponseWriter, r *http.Request) {
-		s.foo.CreateB(nil, 1)
-	})
+func (s *Server) route() {
+	fooPost := func(w http.ResponseWriter, r *http.Request) {
+		valueStr := r.PathValue("value")
+		value, err := strconv.Atoi(valueStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
+		d := dto.Foo{
+			Value: value,
+		}
+		id, err := s.foo.Create(r.Context(), d)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		valueStr = "new foo id : " + strconv.Itoa(id)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(valueStr))
+	}
+
+	fooGet := func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		foo, err := s.foo.Find(r.Context(), id)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(foo.String()))
+	}
+
+	barPost := func(w http.ResponseWriter, r *http.Request) {
+		valueStr := r.PathValue("value")
+		value, err := strconv.Atoi(valueStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		d := dto.Bar{
+			Value: value,
+		}
+		id, err := s.bar.Create(r.Context(), d)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		valueStr = "new bar id : " + strconv.Itoa(id)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(valueStr))
+	}
+
+	barGet := func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		bar, err := s.bar.Find(r.Context(), id)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(bar.String()))
+	}
+
+	foobarPost := func(w http.ResponseWriter, r *http.Request) {
+		fooValueStr := r.PathValue("fooValue")
+		fooValue, err := strconv.Atoi(fooValueStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		barValueStr := r.PathValue("barValue")
+		barValue, err := strconv.Atoi(barValueStr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		f := dto.Foo{
+			Value: fooValue,
+		}
+
+		b := dto.Bar{
+			Value: barValue,
+		}
+
+		fooID, barID, err := s.foobar.Create(r.Context(), f, b)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		value := fmt.Sprintf("new foo id : %d, new bar id : %d", fooID, barID)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(value))
+	}
+
+	http.HandleFunc("POST /foo/{value}", s.generateRequestUID(fooPost))
+	http.HandleFunc("GET /foo/{id}", s.generateRequestUID(fooGet))
+	http.HandleFunc("POST /bar/{value}", s.generateRequestUID(barPost))
+	http.HandleFunc("GET /bar/{id}", s.generateRequestUID(barGet))
+	http.HandleFunc("POST /foobar/{fooValue}/{barValue}", s.generateRequestUID(foobarPost))
+}
+
+func (s *Server) generateRequestUID(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uuid := uuid.New().String()
+		r = r.WithContext(context.WithValue(r.Context(), "requestID", uuid))
+		next(w, r)
+	}
+}
+
+func (s *Server) Run() {
+	s.route()
 	http.ListenAndServe(":8080", nil)
 }
 
