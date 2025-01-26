@@ -26,50 +26,57 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/example/dto"
-	entity "github.com/ISSuh/simple-gen-proxy/example/entity"
-	"github.com/ISSuh/simple-gen-proxy/example/repository"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
+	entity "github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
 )
 
-type Foo interface {
+type FooBar interface {
 	// @transactional
-	Create(c context.Context, dto dto.Foo) (int, error)
+	Create(c context.Context, foo dto.Foo, bar dto.Bar) (int, int, error)
 
-	Find(c context.Context, id int) (*entity.Foo, error)
-
-	// @transactional
-	FooBara(c context.Context, dto dto.Foo) error
+	Find(c context.Context, fooID, barID int) (*entity.Foo, *entity.Bar, error)
 }
 
-type FooService struct {
-	repo repository.Foo
+type fooBarService struct {
+	fooService Foo
+	barService Bar
 }
 
-func NewFooService(repo repository.Foo) Foo {
-	return &FooService{
-		repo: repo,
+func NewFooBarService(foo Foo, bar Bar) FooBar {
+	return &fooBarService{
+		fooService: foo,
+		barService: bar,
 	}
 }
 
-func (s *FooService) Create(c context.Context, dto dto.Foo) (int, error) {
-	fmt.Printf("[Foo]CreateA\n")
-	id, err := s.repo.Create(c, dto.Value)
+func (s *fooBarService) Create(c context.Context, foo dto.Foo, bar dto.Bar) (int, int, error) {
+	fmt.Printf("[FooBar]Create\n")
+
+	fooID, err := s.fooService.Create(c, foo)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return id, nil
-}
 
-func (s *FooService) Find(c context.Context, id int) (*entity.Foo, error) {
-	fmt.Printf("[Foo]Find\n")
-	foo, err := s.repo.Find(id)
+	barID, err := s.barService.Create(c, bar)
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
-	return foo, nil
+
+	return fooID, barID, nil
 }
 
-func (s *FooService) FooBara(c context.Context, dto dto.Foo) error {
-	fmt.Printf("[Foo]FooBara\n")
-	return nil
+func (s *fooBarService) Find(c context.Context, fooID, barID int) (*entity.Foo, *entity.Bar, error) {
+	fmt.Printf("[FooBar]Find\n")
+
+	foo, err := s.fooService.Find(c, fooID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bar, err := s.barService.Find(c, barID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return foo, bar, nil
 }

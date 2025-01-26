@@ -23,17 +23,15 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/ISSuh/simple-gen-proxy/example/dto"
-	"github.com/ISSuh/simple-gen-proxy/example/entity"
-	"github.com/ISSuh/simple-gen-proxy/example/repository"
-	"github.com/ISSuh/simple-gen-proxy/example/service"
-	"github.com/ISSuh/simple-gen-proxy/example/service/proxy"
-	"github.com/google/uuid"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/repository"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/service"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/service/proxy"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -85,31 +83,25 @@ func (s *Server) init() error {
 		return err
 	}
 
+	// implement transaction factory function
+	txFatory := func() (proxy.Transaction, error) {
+		tx := repository.NewGORMTransaction(db)
+		return tx, nil
+	}
+
+	// implement transaction helper functions
+	txHelper := proxy.NewTxHepler(txFatory)
+
 	// init single service
 	// proxy use transactioon helper function on repository
-	fooRepo, err := repository.NewFooRepository(db)
-	if err != nil {
-		return err
-	}
-
+	fooRepo := repository.NewFooRepository(db)
 	fooService := service.NewFooService(fooRepo)
-	s.foo = proxy.NewFooProxy(fooService, fooRepo.Transaction())
+	s.foo = proxy.NewFooProxy(fooService, txHelper.Transaction())
 
-	barRepo, err := repository.NewBarRepository(db)
-	if err != nil {
-		return err
-	}
-
+	barRepo := repository.NewBarRepository(db)
 	barService := service.NewBarService(barRepo)
-	s.bar = proxy.NewBarProxy(barService, barRepo.Transaction())
+	s.bar = proxy.NewBarProxy(barService, txHelper.Transaction())
 
-	// init aggregate service
-	rawDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-
-	txHelper := repository.NewTxHepler(rawDB)
 	foobarService := service.NewFooBarService(s.foo, s.bar)
 	s.foobar = proxy.NewFooBarProxy(foobarService, txHelper.Transaction())
 
@@ -144,12 +136,14 @@ func (s *Server) route() {
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
 		foo, err := s.foo.Find(r.Context(), id)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -231,19 +225,11 @@ func (s *Server) route() {
 		w.Write([]byte(value))
 	}
 
-	http.HandleFunc("POST /foo/{value}", s.generateRequestUID(fooPost))
-	http.HandleFunc("GET /foo/{id}", s.generateRequestUID(fooGet))
-	http.HandleFunc("POST /bar/{value}", s.generateRequestUID(barPost))
-	http.HandleFunc("GET /bar/{id}", s.generateRequestUID(barGet))
-	http.HandleFunc("POST /foobar/{fooValue}/{barValue}", s.generateRequestUID(foobarPost))
-}
-
-func (s *Server) generateRequestUID(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		uuid := uuid.New().String()
-		r = r.WithContext(context.WithValue(r.Context(), "requestID", uuid))
-		next(w, r)
-	}
+	http.HandleFunc("POST /foo/{value}", fooPost)
+	http.HandleFunc("GET /foo/{id}", fooGet)
+	http.HandleFunc("POST /bar/{value}", barPost)
+	http.HandleFunc("GET /bar/{id}", barGet)
+	http.HandleFunc("POST /foobar/{fooValue}/{barValue}", foobarPost)
 }
 
 func (s *Server) Run() {

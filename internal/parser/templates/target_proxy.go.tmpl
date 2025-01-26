@@ -6,24 +6,24 @@ package {{.PackageName}}
 import (
     "database/sql"
 
-    {{range .Imports}}
+    {{range .Imports -}}
     {{.Alias}} "{{.Path}}"
     {{end}}
 )
 
 {{range .Interfaces}}
 
-type {{.ProxyTypeName}}TxHelper func(c context.Context, f func(c context.Context) error)
+type {{.ProxyTypeName}}Helper func(c context.Context, f func(c context.Context) error) error
 
 type {{.ProxyTypeName}} struct {
     target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}
-    tx {{.ProxyTypeName}}TxHelper
+    helper {{.ProxyTypeName}}Helper
 }
 
-func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, tx {{.ProxyTypeName}}TxHelper) *{{.ProxyTypeName}} {
+func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, helper {{.ProxyTypeName}}Helper) *{{.ProxyTypeName}} {
     return &{{.ProxyTypeName}}{
         target: target,
-        tx: tx,
+        helper: helper,
     }
 }
 
@@ -38,9 +38,33 @@ func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
             )
         {{end}}
 
-        p.tx({{.UserContextParam}}, func({{.HelperContextParam}} context.Context) error {
+        err = p.helper({{.UserContextParam}}, func({{.HelperContextParam}} context.Context) error {
         {{if .HasResults -}}
             {{.ResultVars}} = p.target.{{.Name}}({{.ParamNamesWithHelperContext}})
+            if err != nil {
+                return err
+            }
+        {{else -}}
+            p.target.{{.Name}}({{.ParamNames}})
+        {{end -}}
+            return nil
+        })
+
+        {{if .HasResults -}}
+            return {{.ResultVars}}
+        {{end -}}
+    {{else if .IsProxy -}}
+        {{if .HasResults -}}
+            var (
+            {{range .Results}}
+                {{.ResultVar}} {{.ResultType -}}
+            {{end}}
+            )
+        {{end}}
+        
+        err = p.helper(context.Background(), func(_ context.Context) error {
+        {{if .HasResults -}}
+            {{.ResultVars}} = p.target.{{.Name}}({{.ParamNames}})
             if err != nil {
                 return err
             }

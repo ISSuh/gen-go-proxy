@@ -26,30 +26,33 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/example/dto"
-	entity "github.com/ISSuh/simple-gen-proxy/example/entity"
-	"github.com/ISSuh/simple-gen-proxy/example/repository"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
+	entity "github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/repository"
 )
 
-type Bar interface {
+type Foo interface {
 	// @transactional
-	Create(c context.Context, dto dto.Bar) (int, error)
+	Create(c context.Context, dto dto.Foo) (int, error)
 
-	Find(c context.Context, id int) (*entity.Bar, error)
+	Find(c context.Context, id int) (*entity.Foo, error)
+
+	// @transactional
+	FooBara(c context.Context, dto dto.Foo) error
 }
 
-type barService struct {
-	repo repository.Bar
+type FooService struct {
+	repo repository.Foo
 }
 
-func NewBarService(repo repository.Bar) Bar {
-	return &barService{
+func NewFooService(repo repository.Foo) Foo {
+	return &FooService{
 		repo: repo,
 	}
 }
 
-func (s *barService) Create(c context.Context, dto dto.Bar) (int, error) {
-	fmt.Printf("[Bar]CreateA\n")
+func (s *FooService) Create(c context.Context, dto dto.Foo) (int, error) {
+	fmt.Printf("[Foo]CreateA\n")
 	id, err := s.repo.Create(c, dto.Value)
 	if err != nil {
 		return 0, err
@@ -57,11 +60,16 @@ func (s *barService) Create(c context.Context, dto dto.Bar) (int, error) {
 	return id, nil
 }
 
-func (s *barService) Find(c context.Context, id int) (*entity.Bar, error) {
-	fmt.Printf("[Bar]Find\n")
-	bar, err := s.repo.Find(id)
+func (s *FooService) Find(c context.Context, id int) (*entity.Foo, error) {
+	fmt.Printf("[Foo]Find\n")
+	foo, err := s.repo.Find(id)
 	if err != nil {
 		return nil, err
 	}
-	return bar, nil
+	return foo, nil
+}
+
+func (s *FooService) FooBara(c context.Context, dto dto.Foo) error {
+	fmt.Printf("[Foo]FooBara\n")
+	return nil
 }

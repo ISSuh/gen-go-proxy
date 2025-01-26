@@ -31,8 +31,11 @@ import (
 
 const (
 	transactionComment = "@transactional"
-	errorType          = "error"
-	contextType        = "context.Context"
+	proxyComment       = "@proxy"
+
+	errorType   = "error"
+	contextType = "context.Context"
+
 	userContextParam   = "_userCtx"
 	helperContextParam = "_helperCtx"
 )
@@ -121,6 +124,7 @@ type Method struct {
 	Results                     Results
 	HasResults                  bool
 	IsTransaction               bool
+	IsProxy                     bool
 	HasError                    bool
 }
 
@@ -138,12 +142,14 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 		}
 
 		isTransaction := isTransactionMethod(method)
+		isProxy := isProxyMethod(method)
+
 		params, err := parseMethodParams(funcType, isTransaction)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("failed to parse method params for %s", methodName), err)
 		}
 
-		results, err := parseMethodResults(funcType, isTransaction)
+		results, err := parseMethodResults(funcType, isTransaction, isProxy)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("failed to parse method results for %s", methodName), err)
 		}
@@ -152,6 +158,7 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 			ProxyTypeName: proxyTypeName,
 			Name:          methodName,
 			IsTransaction: isTransaction,
+			IsProxy:       isProxy,
 			Params:        params.Format(),
 			ParamNames:    params.FormatVars(false),
 			Results:       results,
@@ -175,6 +182,10 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 
 func isTransactionMethod(method *ast.Field) bool {
 	return method.Doc != nil && strings.Contains(method.Doc.Text(), transactionComment)
+}
+
+func isProxyMethod(method *ast.Field) bool {
+	return method.Doc != nil && strings.Contains(method.Doc.Text(), proxyComment)
 }
 
 func parseMethodParams(funcType *ast.FuncType, isTransactional bool) (Params, error) {
@@ -210,7 +221,7 @@ func parseMethodParams(funcType *ast.FuncType, isTransactional bool) (Params, er
 	return params, nil
 }
 
-func parseMethodResults(funcType *ast.FuncType, isTransactional bool) (Results, error) {
+func parseMethodResults(funcType *ast.FuncType, isTransactional, isProxy bool) (Results, error) {
 	results := Results{}
 	hasError := false
 	if funcType.Results != nil {
@@ -219,7 +230,7 @@ func parseMethodResults(funcType *ast.FuncType, isTransactional bool) (Results, 
 			vars := fmt.Sprintf("r%d", i)
 			if resultType == errorType {
 				if hasError {
-					return nil, errors.New("method must have at most one error result")
+					return nil, errors.New("proxy or transactional method must have at most one error result")
 				}
 
 				hasError = true
@@ -235,8 +246,8 @@ func parseMethodResults(funcType *ast.FuncType, isTransactional bool) (Results, 
 		}
 	}
 
-	if isTransactional && !hasError {
-		return nil, errors.New("transactional method must return an error")
+	if (isTransactional || isProxy) && !hasError {
+		return nil, errors.New("proxy or transactional method must return an error")
 	}
 
 	return results, nil

@@ -26,7 +26,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ISSuh/simple-gen-proxy/example/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
 	"gorm.io/gorm"
 )
 
@@ -36,30 +36,16 @@ type Foo interface {
 }
 
 type fooRepository struct {
-	TxHepler
-
 	db *gorm.DB
 }
 
-func NewFooRepository(db *gorm.DB) (*fooRepository, error) {
-	rawDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-
+func NewFooRepository(db *gorm.DB) *fooRepository {
 	return &fooRepository{
-		TxHepler: NewTxHepler(rawDB),
-		db:       db,
-	}, nil
+		db: db,
+	}
 }
 
 func (r *fooRepository) Create(c context.Context, value int) (int, error) {
-	requestID, ok := c.Value("requestID").(string)
-	if !ok {
-		return 0, errors.New("requestID not found")
-	}
-
-	txKey := requestID
 	conn, ok := c.Value(txKey).(*gorm.DB)
 	if !ok {
 		return 0, errors.New("transaction not found")
@@ -77,6 +63,7 @@ func (r *fooRepository) Create(c context.Context, value int) (int, error) {
 	if err := tx.Error; err != nil {
 		return 0, err
 	}
+
 	return f.ID, nil
 }
 

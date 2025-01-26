@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 
 // Copyright (c) 2025 ISSuh
 
@@ -20,72 +20,48 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package repository
+package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/example/entity"
-	"gorm.io/gorm"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
+	entity "github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/repository"
 )
 
 type Bar interface {
-	Create(c context.Context, value int) (int, error)
-	Find(id int) (*entity.Bar, error)
+	// @transactional
+	Create(c context.Context, dto dto.Bar) (int, error)
+
+	Find(c context.Context, id int) (*entity.Bar, error)
 }
 
-type barRepository struct {
-	TxHepler
-
-	db *gorm.DB
+type barService struct {
+	repo repository.Bar
 }
 
-func NewBarRepository(db *gorm.DB) (*barRepository, error) {
-	rawDB, err := db.DB()
+func NewBarService(repo repository.Bar) Bar {
+	return &barService{
+		repo: repo,
+	}
+}
+
+func (s *barService) Create(c context.Context, dto dto.Bar) (int, error) {
+	fmt.Printf("[Bar]CreateA\n")
+	id, err := s.repo.Create(c, dto.Value)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (s *barService) Find(c context.Context, id int) (*entity.Bar, error) {
+	fmt.Printf("[Bar]Find\n")
+	bar, err := s.repo.Find(id)
 	if err != nil {
 		return nil, err
 	}
-
-	return &barRepository{
-		TxHepler: NewTxHepler(rawDB),
-		db:       db,
-	}, nil
-}
-
-func (r *barRepository) Create(c context.Context, value int) (int, error) {
-	requestID, ok := c.Value("requestID").(string)
-	if !ok {
-		return 0, errors.New("requestID not found")
-	}
-
-	txKey := requestID
-	conn, ok := c.Value(txKey).(*sql.Tx)
-	if !ok {
-		return 0, errors.New("transaction not found")
-	}
-
-	if value < 0 {
-		return 0, errors.New("value must be greater than 0")
-	}
-
-	b := &entity.Bar{
-		Value: int(value),
-	}
-
-	tx := conn.Create(b)
-	if err := tx.Error; err != nil {
-		return 0, err
-	}
-	return b.ID, nil
-}
-
-func (r *barRepository) Find(id int) (*entity.Bar, error) {
-	b := &entity.Bar{}
-	tx := r.db.Where("id = ?", id)
-	if err := tx.First(b).Error; err != nil {
-		return nil, err
-	}
-	return b, nil
+	return bar, nil
 }

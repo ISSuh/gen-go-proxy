@@ -20,63 +20,50 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package service
+package main
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/example/dto"
-	entity "github.com/ISSuh/simple-gen-proxy/example/entity"
+	"github.com/ISSuh/simple-gen-proxy/example/proxy/service"
+	"github.com/ISSuh/simple-gen-proxy/example/proxy/service/proxy"
 )
 
-type FooBar interface {
-	// @transactional
-	Create(c context.Context, foo dto.Foo, bar dto.Bar) (int, int, error)
+// implement user custom proxy helper
+func ProxyHelper() func(c context.Context, f func(c context.Context) error) error {
+	return func(c context.Context, f func(c context.Context) error) error {
+		// run before target logic
+		fmt.Println("[ProxyHelper] before")
 
-	Find(c context.Context, fooID, barID int) (*entity.Foo, *entity.Bar, error)
-}
+		// run target logic
+		err := f(c)
+		if err != nil {
+			fmt.Printf("[ProxyHelper] err occurred. err : %s\n", err)
+		}
 
-type fooBarService struct {
-	fooService Foo
-	barService Bar
-}
+		// run after target logic
+		fmt.Println("[ProxyHelper] after")
 
-func NewFooBarService(foo Foo, bar Bar) FooBar {
-	return &fooBarService{
-		fooService: foo,
-		barService: bar,
+		return err
 	}
 }
 
-func (s *fooBarService) Create(c context.Context, foo dto.Foo, bar dto.Bar) (int, int, error) {
-	fmt.Printf("[FooBar]Create\n")
+func main() {
+	target := service.NewFoo()
+	proxy := proxy.NewFooProxy(target, ProxyHelper())
 
-	fooID, err := s.fooService.Create(c, foo)
-	if err != nil {
-		return 0, 0, err
+	if val, err := proxy.Logic(false); err != nil {
+		fmt.Println("err: ", err)
+	} else {
+		fmt.Println("val: ", val)
 	}
 
-	barID, err := s.barService.Create(c, bar)
-	if err != nil {
-		return 0, 0, err
+	fmt.Println()
+
+	if val, err := proxy.Logic(true); err != nil {
+		fmt.Println("err: ", err)
+	} else {
+		fmt.Println("val: ", val)
 	}
-
-	return fooID, barID, nil
-}
-
-func (s *fooBarService) Find(c context.Context, fooID, barID int) (*entity.Foo, *entity.Bar, error) {
-	fmt.Printf("[FooBar]Find\n")
-
-	foo, err := s.fooService.Find(c, fooID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	bar, err := s.barService.Find(c, barID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return foo, bar, nil
 }

@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 
 // Copyright (c) 2025 ISSuh
 
@@ -24,62 +24,53 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"errors"
+
+	"github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
+	"gorm.io/gorm"
 )
 
-type TxHepler struct {
-	db *sql.DB
+type Bar interface {
+	Create(c context.Context, value int) (int, error)
+	Find(id int) (*entity.Bar, error)
 }
 
-func NewTxHepler(db *sql.DB) TxHepler {
-	return TxHepler{
+type barRepository struct {
+	db *gorm.DB
+}
+
+func NewBarRepository(db *gorm.DB) *barRepository {
+	return &barRepository{
 		db: db,
 	}
 }
 
-func (t TxHepler) Transaction() func(c context.Context, f func(c context.Context) error) {
-	return func(c context.Context, f func(c context.Context) error) {
-		requestID, ok := c.Value("requestID").(string)
-		if !ok {
-			panic(errors.New("requestID not found"))
-		}
-
-		txKey := requestID
-		tx, ok := c.Value(txKey).(*sql.Tx)
-		if tx == nil {
-			t.newTransaction(c, f, requestID)
-		} else {
-			if !ok {
-				panic(errors.New("transaction not found"))
-			}
-
-			t.subTransaction(c, f, tx)
-		}
-
-		tx.Commit()
+func (r *barRepository) Create(c context.Context, value int) (int, error) {
+	conn, ok := c.Value(txKey).(*gorm.DB)
+	if !ok {
+		return 0, errors.New("transaction not found")
 	}
+
+	if value < 0 {
+		return 0, errors.New("value must be greater than 0")
+	}
+
+	b := &entity.Bar{
+		Value: int(value),
+	}
+
+	tx := conn.Create(b)
+	if err := tx.Error; err != nil {
+		return 0, err
+	}
+	return b.ID, nil
 }
 
-func (t TxHepler) newTransaction(c context.Context, f func(c context.Context) error, txKey string) {
-	tx, err := t.db.Begin()
-	if err != nil {
-		panic(err)
+func (r *barRepository) Find(id int) (*entity.Bar, error) {
+	b := &entity.Bar{}
+	tx := r.db.Where("id = ?", id)
+	if err := tx.First(b).Error; err != nil {
+		return nil, err
 	}
-
-	c = context.WithValue(c, txKey, tx)
-	if err := f(c); err != nil {
-		tx.Rollback()
-		return
-	}
-
-	tx.Commit()
-}
-
-func (t TxHepler) subTransaction(c context.Context, f func(c context.Context) error, tx *sql.Tx) {
-	err := f(c)
-	if err != nil {
-		tx.Rollback()
-		return
-	}
+	return b, nil
 }
