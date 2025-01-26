@@ -13,17 +13,17 @@ import (
 
 {{range .Interfaces}}
 
-type {{.ProxyTypeName}}Middleware func(func(context.Context) error) func(context.Context) error
+type {{.ProxyTypeName}}Helper func(c context.Context, f func(c context.Context) error) error
 
 type {{.ProxyTypeName}} struct {
     target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}
-    middlewares []{{.ProxyTypeName}}Middleware
+    helper {{.ProxyTypeName}}Helper
 }
 
-func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, middlewares ...{{.ProxyTypeName}}Middleware) *{{.ProxyTypeName}} {
+func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, helper {{.ProxyTypeName}}Helper) *{{.ProxyTypeName}} {
     return &{{.ProxyTypeName}}{
         target: target,
-        middlewares: middlewares,
+        helper: helper,
     }
 }
 
@@ -38,7 +38,7 @@ func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
             )
         {{end}}
 
-        f := func({{.HelperContextParam}} context.Context) error {
+        err = p.helper({{.UserContextParam}}, func({{.HelperContextParam}} context.Context) error {
         {{if .HasResults -}}
             {{.ResultVars}} = p.target.{{.Name}}({{.ParamNamesWithHelperContext}})
             if err != nil {
@@ -48,14 +48,8 @@ func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
             p.target.{{.Name}}({{.ParamNames}})
         {{end -}}
             return nil
-        }
+        })
 
-        for i := range p.middlewares {
-		    index := len(p.middlewares) - i - 1
-		    f = p.middlewares[index](f)
-	    }
-
-        f({{.UserContextParam}})
         {{if .HasResults -}}
             return {{.ResultVars}}
         {{end -}}
@@ -68,7 +62,7 @@ func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
             )
         {{end}}
         
-        f := func({{.HelperContextParam}} context.Context) error {
+        err = p.helper(context.Background(), func(_ context.Context) error {
         {{if .HasResults -}}
             {{.ResultVars}} = p.target.{{.Name}}({{.ParamNames}})
             if err != nil {
@@ -78,14 +72,8 @@ func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
             p.target.{{.Name}}({{.ParamNames}})
         {{end -}}
             return nil
-        }
+        })
 
-        for i := range p.middlewares {
-		    index := len(p.middlewares) - i - 1
-		    f = p.middlewares[index](f)
-	    }
-
-        f(context.TODO())
         {{if .HasResults -}}
             return {{.ResultVars}}
         {{end -}}

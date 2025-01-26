@@ -31,27 +31,68 @@ import (
 )
 
 // implement user custom proxy helper
-func ProxyHelper() func(c context.Context, f func(c context.Context) error) error {
-	return func(c context.Context, f func(c context.Context) error) error {
+func Wrapped(next func(c context.Context) error) func(context.Context) error {
+	return func(c context.Context) error {
 		// run before target logic
-		fmt.Println("[ProxyHelper] before")
+		fmt.Println("[Wrapped] before")
 
 		// run target logic
-		err := f(c)
+		err := next(c)
 		if err != nil {
-			fmt.Printf("[ProxyHelper] err occurred. err : %s\n", err)
+			fmt.Printf("[Wrapped] err occurred. err : %s\n", err)
 		}
 
 		// run after target logic
-		fmt.Println("[ProxyHelper] after")
+		fmt.Println("[Wrapped] after")
 
 		return err
 	}
 }
 
+func Before(next func(c context.Context) error) func(context.Context) error {
+	return func(c context.Context) error {
+		// run before target logic
+		fmt.Println("[Before] before")
+		// run target logic
+		return next(c)
+	}
+}
+
+func After(next func(c context.Context) error) func(context.Context) error {
+	return func(c context.Context) error {
+		err := next(c)
+		if err != nil {
+			fmt.Printf("[After] err occurred. err : %s\n", err)
+		}
+
+		// run after target logic
+		fmt.Println("[After] after")
+
+		return err
+	}
+}
+
+// func ProxyHelper() func(c context.Context, f func(c context.Context) error) error {
+// 	return func(c context.Context, f func(c context.Context) error) error {
+// 		// run before target logic
+// 		fmt.Println("[ProxyHelper] before")
+
+// 		// run target logic
+// 		err := f(c)
+// 		if err != nil {
+// 			fmt.Printf("[ProxyHelper] err occurred. err : %s\n", err)
+// 		}
+
+// 		// run after target logic
+// 		fmt.Println("[ProxyHelper] after")
+
+// 		return err
+// 	}
+// }
+
 func main() {
 	target := service.NewFoo()
-	proxy := proxy.NewFooProxy(target, ProxyHelper())
+	proxy := proxy.NewFooProxy(target, Wrapped, Before, After)
 
 	if val, err := proxy.Logic(false); err != nil {
 		fmt.Println("err: ", err)

@@ -7,11 +7,20 @@
 
 
         {
-            "name": "example",
+            "name": "example-tx",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/example/main.go",
+            "program": "${workspaceFolder}/example/transaction/main.go",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "example-proxy",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/example/proxy/main.go",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         },

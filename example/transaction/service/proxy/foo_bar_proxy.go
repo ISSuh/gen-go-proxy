@@ -11,17 +11,17 @@ import (
 	service "github.com/ISSuh/simple-gen-proxy/example/transaction/service"
 )
 
-type FooBarProxyHelper func(c context.Context, f func(c context.Context) error) error
+type FooBarProxyMiddleware func(func(context.Context) error) func(context.Context) error
 
 type FooBarProxy struct {
-	target service.FooBar
-	tx     FooBarProxyHelper
+	target      service.FooBar
+	middlewares []FooBarProxyMiddleware
 }
 
-func NewFooBarProxy(target service.FooBar, tx FooBarProxyHelper) *FooBarProxy {
+func NewFooBarProxy(target service.FooBar, middlewares ...FooBarProxyMiddleware) *FooBarProxy {
 	return &FooBarProxy{
-		target: target,
-		tx:     tx,
+		target:      target,
+		middlewares: middlewares,
 	}
 }
 
@@ -32,14 +32,20 @@ func (p *FooBarProxy) Create(_userCtx context.Context, foo dto.Foo, bar dto.Bar)
 		err error
 	)
 
-	err = p.tx(_userCtx, func(_helperCtx context.Context) error {
+	f := func(_helperCtx context.Context) error {
 		r0, r1, err = p.target.Create(_helperCtx, foo, bar)
 		if err != nil {
 			return err
 		}
 		return nil
-	})
+	}
 
+	for i := range p.middlewares {
+		index := len(p.middlewares) - i - 1
+		f = p.middlewares[index](f)
+	}
+
+	f(_userCtx)
 	return r0, r1, err
 }
 

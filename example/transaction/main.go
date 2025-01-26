@@ -96,14 +96,14 @@ func (s *Server) init() error {
 	// proxy use transactioon helper function on repository
 	fooRepo := repository.NewFooRepository(db)
 	fooService := service.NewFooService(fooRepo)
-	s.foo = proxy.NewFooProxy(fooService, txHelper.Transaction())
+	s.foo = proxy.NewFooProxy(fooService, txHelper.TxMiddleware)
 
 	barRepo := repository.NewBarRepository(db)
 	barService := service.NewBarService(barRepo)
-	s.bar = proxy.NewBarProxy(barService, txHelper.Transaction())
+	s.bar = proxy.NewBarProxy(barService, txHelper.TxMiddleware)
 
 	foobarService := service.NewFooBarService(s.foo, s.bar)
-	s.foobar = proxy.NewFooBarProxy(foobarService, txHelper.Transaction())
+	s.foobar = proxy.NewFooBarProxy(foobarService, txHelper.TxMiddleware)
 
 	return nil
 }

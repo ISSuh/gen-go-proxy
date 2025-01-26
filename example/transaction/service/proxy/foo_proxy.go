@@ -7,23 +7,21 @@ import (
 	"context"
 
 	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
-
 	entity "github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
-
 	service "github.com/ISSuh/simple-gen-proxy/example/transaction/service"
 )
 
-type FooProxyHelper func(c context.Context, f func(c context.Context) error) error
+type FooProxyMiddleware func(func(context.Context) error) func(context.Context) error
 
 type FooProxy struct {
-	target service.Foo
-	tx     FooProxyHelper
+	target      service.Foo
+	middlewares []FooProxyMiddleware
 }
 
-func NewFooProxy(target service.Foo, tx FooProxyHelper) *FooProxy {
+func NewFooProxy(target service.Foo, middlewares ...FooProxyMiddleware) *FooProxy {
 	return &FooProxy{
-		target: target,
-		tx:     tx,
+		target:      target,
+		middlewares: middlewares,
 	}
 }
 
@@ -33,14 +31,20 @@ func (p *FooProxy) Create(_userCtx context.Context, dto dto.Foo) (int, error) {
 		err error
 	)
 
-	err = p.tx(_userCtx, func(_helperCtx context.Context) error {
+	f := func(_helperCtx context.Context) error {
 		r0, err = p.target.Create(_helperCtx, dto)
 		if err != nil {
 			return err
 		}
 		return nil
-	})
+	}
 
+	for i := range p.middlewares {
+		index := len(p.middlewares) - i - 1
+		f = p.middlewares[index](f)
+	}
+
+	f(_userCtx)
 	return r0, err
 }
 
@@ -53,13 +57,19 @@ func (p *FooProxy) FooBara(_userCtx context.Context, dto dto.Foo) error {
 		err error
 	)
 
-	err = p.tx(_userCtx, func(_helperCtx context.Context) error {
+	f := func(_helperCtx context.Context) error {
 		err = p.target.FooBara(_helperCtx, dto)
 		if err != nil {
 			return err
 		}
 		return nil
-	})
+	}
 
+	for i := range p.middlewares {
+		index := len(p.middlewares) - i - 1
+		f = p.middlewares[index](f)
+	}
+
+	f(_userCtx)
 	return err
 }
