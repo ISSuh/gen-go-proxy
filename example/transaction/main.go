@@ -89,21 +89,20 @@ func (s *Server) init() error {
 		return tx, nil
 	}
 
-	// implement transaction helper functions
-	txHelper := proxy.NewTxHepler(txFatory)
-
 	// init single service
 	// proxy use transactioon helper function on repository
+	txMiddleware := proxy.TxMiddleware(txFatory)
+
 	fooRepo := repository.NewFooRepository(db)
 	fooService := service.NewFooService(fooRepo)
-	s.foo = proxy.NewFooProxy(fooService, txHelper.TxMiddleware)
+	s.foo = proxy.NewFooProxy(fooService, txMiddleware)
 
 	barRepo := repository.NewBarRepository(db)
 	barService := service.NewBarService(barRepo)
-	s.bar = proxy.NewBarProxy(barService, txHelper.TxMiddleware)
+	s.bar = proxy.NewBarProxy(barService, txMiddleware)
 
 	foobarService := service.NewFooBarService(s.foo, s.bar)
-	s.foobar = proxy.NewFooBarProxy(foobarService, txHelper.TxMiddleware)
+	s.foobar = proxy.NewFooBarProxy(foobarService, txMiddleware)
 
 	return nil
 }

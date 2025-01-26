@@ -72,24 +72,6 @@ func After(next func(c context.Context) error) func(context.Context) error {
 	}
 }
 
-// func ProxyHelper() func(c context.Context, f func(c context.Context) error) error {
-// 	return func(c context.Context, f func(c context.Context) error) error {
-// 		// run before target logic
-// 		fmt.Println("[ProxyHelper] before")
-
-// 		// run target logic
-// 		err := f(c)
-// 		if err != nil {
-// 			fmt.Printf("[ProxyHelper] err occurred. err : %s\n", err)
-// 		}
-
-// 		// run after target logic
-// 		fmt.Println("[ProxyHelper] after")
-
-// 		return err
-// 	}
-// }
-
 func main() {
 	target := service.NewFoo()
 	proxy := proxy.NewFooProxy(target, Wrapped, Before, After)
