@@ -89,10 +89,10 @@ func (s *Server) init() error {
 		return tx, nil
 	}
 
-	// init single service
-	// proxy use transactioon helper function on repository
+	// create transaction middleware
 	txMiddleware := proxy.TxMiddleware(txFatory)
 
+	// create single service
 	fooRepo := repository.NewFooRepository(db)
 	fooService := service.NewFooService(fooRepo)
 	s.foo = proxy.NewFooProxy(fooService, txMiddleware)
@@ -101,6 +101,7 @@ func (s *Server) init() error {
 	barService := service.NewBarService(barRepo)
 	s.bar = proxy.NewBarProxy(barService, txMiddleware)
 
+	// create aggregate service
 	foobarService := service.NewFooBarService(s.foo, s.bar)
 	s.foobar = proxy.NewFooBarProxy(foobarService, txMiddleware)
 

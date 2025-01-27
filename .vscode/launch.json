@@ -25,7 +25,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "sgp",
+            "name": "sgp-transaction",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -33,15 +33,16 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/example/service/foo.go",
-                "-o", "/home/issuh/workspace/my_project/gen-tx-proxy/example/service/proxy",
+                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/example/transaction/service",
+                "-o", "/home/issuh/workspace/my_project/gen-tx-proxy/example/transaction/service/proxy",
                 "-p", "proxy",
                 "-n", "service",
-                "-l", "github.com/ISSuh/simple-gen-proxy/example/service",
+                "-l", "github.com/ISSuh/simple-gen-proxy/example/transaction/service",
+                "-x"
             ]
         },
         {
-            "name": "sgp-single",
+            "name": "sgp-proxy",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -49,8 +50,23 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "-t", "./example/service/foo_bar.go",
-
+                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/example/proxy/service",
+                "-o", "/home/issuh/workspace/my_project/gen-tx-proxy/example/proxy/service/proxy",
+                "-p", "proxy",
+                "-n", "service",
+                "-l", "github.com/ISSuh/simple-gen-proxy/example/proxy/service",
+            ]
+        },
+        {
+            "name": "sgp-proxy-single",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/main.go",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "-t", "/home/issuh/workspace/my_project/gen-tx-proxy/example/proxy/service",
             ]
         },
     ]

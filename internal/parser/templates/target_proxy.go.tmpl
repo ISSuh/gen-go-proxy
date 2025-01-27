@@ -4,8 +4,6 @@
 package {{.PackageName}}
 
 import (
-    "database/sql"
-
     {{range .Imports -}}
     {{.Alias}} "{{.Path}}"
     {{end}}
@@ -16,11 +14,11 @@ import (
 type {{.ProxyTypeName}}Middleware func(func(context.Context) error) func(context.Context) error
 
 type {{.ProxyTypeName}} struct {
-    target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}
+    target {{if .IsDiffrentPackage}}{{.InterfacePackage}}.{{end}}{{.InterfaceName}}
     middlewares []{{.ProxyTypeName}}Middleware
 }
 
-func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePakcage}}.{{end}}{{.InterfaceName}}, middlewares ...{{.ProxyTypeName}}Middleware) *{{.ProxyTypeName}} {
+func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePackage}}.{{end}}{{.InterfaceName}}, middlewares ...{{.ProxyTypeName}}Middleware) *{{.ProxyTypeName}} {
     return &{{.ProxyTypeName}}{
         target: target,
         middlewares: middlewares,

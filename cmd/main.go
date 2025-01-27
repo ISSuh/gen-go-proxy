@@ -23,9 +23,22 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/ISSuh/simple-gen-proxy/internal/option"
 	"github.com/ISSuh/simple-gen-proxy/internal/parser"
 )
+
+const (
+	proxyFileoutFilePathSuffix = "_proxy"
+	sourceFileExtention        = ".go"
+	txMiddlewareFileName       = "proxy_middleware_tx"
+)
+
+var errGenFailed = errors.New("failed to generate proxy")
 
 type Import struct {
 	Alias string
@@ -38,13 +51,122 @@ func main() {
 		panic(err)
 	}
 
-	g := parser.NewGenerator()
-	data, err := g.Parse(args)
+	// Get target files
+	targetDir, err := pathToAbsPath(args.Target)
 	if err != nil {
-		panic(err)
+		panic(errors.Join(errGenFailed, err))
 	}
 
-	if err := g.Generate(args.Output, data); err != nil {
-		panic(err)
+	items, err := os.ReadDir(targetDir)
+	if err != nil {
+		panic(errors.Join(errGenFailed, err))
 	}
+
+	fileNames := []string{}
+	for _, item := range items {
+		if item.IsDir() {
+			continue
+		}
+
+		fileNames = append(fileNames, item.Name())
+	}
+
+	fmt.Printf("Target Dir: %s\n", targetDir)
+	fmt.Printf("Files: %v\n", fileNames)
+
+	// Get output path
+	outPath, err := outputPath(args.Output, targetDir)
+	if err != nil {
+		panic(errors.Join(errGenFailed, err))
+	}
+
+	// Generate proxy files from target files
+	packgeName := args.Package
+	for _, fileName := range fileNames {
+		filePath := filepath.Join(targetDir, fileName)
+		if err != nil {
+			panic(errors.Join(errGenFailed, err))
+		}
+
+		fileNameWithOutExt := fileNameWithoutExt(fileName)
+		outFileName := fileNameWithOutExt + proxyFileoutFilePathSuffix + sourceFileExtention
+		outFilePath := filepath.Join(outPath, outFileName)
+
+		// Parse target file
+		g := parser.NewGenerator()
+
+		param := parser.ParseParam{
+			TargetFile:           filePath,
+			TargetFileDir:        targetDir,
+			OutFile:              outFileName,
+			ProxyPackageName:     args.Package,
+			InterfacePackageName: args.InterfacePackage.Name,
+			InterfacePackagePath: args.InterfacePackage.Path,
+		}
+
+		tmpl, err := g.Parse(param)
+		if err != nil {
+			panic(errors.Join(errGenFailed, err))
+		}
+
+		if len(tmpl.Data.Interfaces) == 0 {
+			fmt.Printf("Generate proxy: No interface found in %s\n", fileName)
+			continue
+		}
+
+		fmt.Printf("Generate proxy: from %v. to %s\n", tmpl.Data.Interfaces.Names(), outFilePath)
+
+		// Generate proxy file
+		if err := g.GenerateProxy(outFilePath, tmpl); err != nil {
+			panic(errors.Join(errGenFailed, err))
+		}
+
+		packgeName = tmpl.Data.PackageName
+	}
+
+	// Generate transaction middleware
+	if args.UseTxMiddleware {
+		outFileName := txMiddlewareFileName + sourceFileExtention
+		outFilePath := filepath.Join(outPath, outFileName)
+
+		tmpl := parser.Template{
+			Data: &parser.TemplateData{
+				PackageName: packgeName,
+			},
+		}
+
+		g := parser.NewGenerator()
+		if err := g.GenerateTxMiddleware(outFilePath, tmpl); err != nil {
+			panic(errors.Join(errGenFailed, err))
+		}
+
+		fmt.Printf("Generate proxy: generate transaction middleware. To %s\n", outPath)
+	}
+}
+
+func pathToAbsPath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	return absPath, nil
+}
+
+func outputPath(output, targetDir string) (string, error) {
+	outPath := output
+	if outPath == "" {
+		outPath = targetDir
+	}
+
+	outPath, err := pathToAbsPath(outPath)
+	if err != nil {
+		return "", err
+	}
+
+	return outPath, nil
+}
+
+func fileNameWithoutExt(path string) string {
+	return filepath.Base(path[:len(path)-len(sourceFileExtention)])
 }

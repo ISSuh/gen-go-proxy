@@ -33,10 +33,20 @@ const (
 type Interface struct {
 	ProxyTypeName     string
 	InterfaceName     string
-	InterfacePakcage  string
+	InterfacePackage  string
 	IsDiffrentPackage bool
 	Methods           []Method
 	types             *ast.InterfaceType
+}
+
+type Interfaces []Interface
+
+func (i Interfaces) Names() []string {
+	names := []string{}
+	for _, iface := range i {
+		names = append(names, iface.InterfaceName)
+	}
+	return names
 }
 
 func ParseInterface(node *ast.File, isDiffrentPackage bool) ([]Interface, error) {
@@ -74,7 +84,7 @@ func parseInterfaceType(node *ast.File, isDiffrentPackage bool) ([]Interface, er
 		i := Interface{
 			types:             iface,
 			InterfaceName:     spec.Name.Name,
-			InterfacePakcage:  node.Name.Name,
+			InterfacePackage:  node.Name.Name,
 			IsDiffrentPackage: isDiffrentPackage,
 		}
 

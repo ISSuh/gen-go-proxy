@@ -35,9 +35,10 @@ type InterfacePackage struct {
 
 type Arguments struct {
 	InterfacePackage
-	Target  string `arg:"required,-t,--target" help:"target interface source code file. is required"`
-	Output  string `arg:"-o,--output" help:"output file path. default is the same as the target interface source code file"`
-	Pakcage string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
+	Target          string `arg:"required,-t,--target" help:"target directory path of the interface source code file. is required"`
+	Output          string `arg:"-o,--output" help:"output file path. default is the same as the target interface source code file"`
+	Package         string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
+	UseTxMiddleware bool   `arg:"-x,--use-tx-middleware" help:"generate transaction middleware. default is false"`
 }
 
 func NewArguments() Arguments {
