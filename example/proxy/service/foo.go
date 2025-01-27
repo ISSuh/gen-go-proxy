@@ -22,16 +22,35 @@
 
 package service
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Foo interface {
-	// use @proxy comment if you want to generate proxy code
+	// use @{annotation name} comment if you want to generate proxy code
 	// @proxy
 	Logic(needEmitErr bool) (string, error)
+
+	// also support multiple annotation
+	// proxy middleware runs in order of annotation
+	// @custom1
+	// @custom2
+	Foo() int
 }
 
-type foo struct {
+type Bar interface {
+	// use @{annotation name} comment if you want to generate proxy code
+	// @proxy
+	Logic(needEmitErr bool) (string, error)
+
+	// also support multiple annotation
+	// proxy middleware runs in order of annotation
+	// @custom1
+	// @custom2
+	Foo() int
 }
+
+type foo struct{}
 
 func NewFoo() Foo {
 	return &foo{}
@@ -43,4 +62,28 @@ func (f *foo) Logic(needEmitErr bool) (string, error) {
 		return "", fmt.Errorf("emit error")
 	}
 	return "foo logic", nil
+}
+
+func (f *foo) Foo() int {
+	fmt.Println("[Foo] foo")
+	return 1
+}
+
+type bar struct{}
+
+func NewBar() Bar {
+	return &bar{}
+}
+
+func (b *bar) Logic(needEmitErr bool) (string, error) {
+	fmt.Println("[Bar] logic")
+	if needEmitErr {
+		return "", fmt.Errorf("emit error")
+	}
+	return "bar logic", nil
+}
+
+func (b *bar) Foo() int {
+	fmt.Println("[Bar] foo")
+	return 1
 }

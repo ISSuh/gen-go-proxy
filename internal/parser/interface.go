@@ -35,7 +35,8 @@ type Interface struct {
 	InterfaceName     string
 	InterfacePackage  string
 	IsDiffrentPackage bool
-	Methods           []Method
+	Methods           Methods
+	AllAnnotations    Annotations
 	types             *ast.InterfaceType
 }
 
@@ -63,6 +64,7 @@ func ParseInterface(node *ast.File, isDiffrentPackage bool) ([]Interface, error)
 		}
 
 		interfaces[i].Methods = append(interfaces[i].Methods, m...)
+		interfaces[i].AllAnnotations = interfaces[i].Methods.AllAnnotations()
 	}
 
 	return interfaces, nil

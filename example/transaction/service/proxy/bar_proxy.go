@@ -11,18 +11,32 @@ import (
 	service "github.com/ISSuh/simple-gen-proxy/example/transaction/service"
 )
 
+const (
+	transactionalAnnotationKeyOnBar string = "transactional"
+)
+
 type BarProxyMiddleware func(func(context.Context) error) func(context.Context) error
+type BarProxyMiddlewareByAnnotation map[string][]BarProxyMiddleware
 
 type BarProxy struct {
-	target      service.Bar
-	middlewares []BarProxyMiddleware
+	target                   service.Bar
+	transactionalMiddlewares []BarProxyMiddleware
 }
 
-func NewBarProxy(target service.Bar, middlewares ...BarProxyMiddleware) *BarProxy {
-	return &BarProxy{
-		target:      target,
-		middlewares: middlewares,
+func NewBarProxy(target service.Bar, middlewares BarProxyMiddlewareByAnnotation) *BarProxy {
+	p := &BarProxy{
+		target: target,
 	}
+
+	for key, value := range middlewares {
+		switch key {
+
+		case transactionalAnnotationKeyOnBar:
+			p.transactionalMiddlewares = value
+		}
+	}
+
+	return p
 }
 
 func (p *BarProxy) Create(_userCtx context.Context, dto dto.Bar) (int, error) {
@@ -39,9 +53,9 @@ func (p *BarProxy) Create(_userCtx context.Context, dto dto.Bar) (int, error) {
 		return nil
 	}
 
-	for i := range p.middlewares {
-		index := len(p.middlewares) - i - 1
-		f = p.middlewares[index](f)
+	for i := range p.transactionalMiddlewares {
+		index := len(p.transactionalMiddlewares) - i - 1
+		f = p.transactionalMiddlewares[index](f)
 	}
 
 	f(_userCtx)

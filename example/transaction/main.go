@@ -23,6 +23,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -92,18 +93,22 @@ func (s *Server) init() error {
 	// create transaction middleware
 	txMiddleware := proxy.TxMiddleware(txFatory)
 
+	m := map[string][]func(func(context.Context) error) func(context.Context) error{
+		"transactional": {txMiddleware},
+	}
+
 	// create single service
 	fooRepo := repository.NewFooRepository(db)
 	fooService := service.NewFooService(fooRepo)
-	s.foo = proxy.NewFooProxy(fooService, txMiddleware)
+	s.foo = proxy.NewFooProxy(fooService, m)
 
 	barRepo := repository.NewBarRepository(db)
 	barService := service.NewBarService(barRepo)
-	s.bar = proxy.NewBarProxy(barService, txMiddleware)
+	s.bar = proxy.NewBarProxy(barService, m)
 
 	// create aggregate service
 	foobarService := service.NewFooBarService(s.foo, s.bar)
-	s.foobar = proxy.NewFooBarProxy(foobarService, txMiddleware)
+	s.foobar = proxy.NewFooBarProxy(foobarService, m)
 
 	return nil
 }

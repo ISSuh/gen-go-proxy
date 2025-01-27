@@ -11,9 +11,15 @@ package service
 
 // implement target interface
 type Foo interface {
-  // use @proxy comment if you want to generate proxy code
+  // use @{annotation name} comment if you want to generate proxy code
   // @proxy
   Logic(needEmitErr bool) (string, error)
+
+  // also support multiple annotation
+  // proxy middleware runs in order of annotation
+  // @custom1
+  // @custom2
+  Foo() int
 }
 ```
 
@@ -60,7 +66,7 @@ func After(next func(c context.Context) error) func(context.Context) error {
 ### generate proxy code
 
 ```bash
-$ simple-gen-proxy -t service
+$ simple-gen-proxy -t example/proxy/service
 ```
 
 ### use generated proxy code
@@ -69,7 +75,17 @@ $ simple-gen-proxy -t service
 // create instence and regist middleware
 func main() {
   target := service.NewFoo()
-  proxy := proxy.NewFooProxy(target, Wrapped, Before, After)
+
+  // middleware by annotation
+  // key: annotation name
+  // value: middleware list
+  m := service.FooProxyMiddlewareByAnnotation{
+    "proxy":   {Wrapped, Before, After},
+    "custom1": {Wrapped},
+    "custom2": {Before, After},
+  }
+
+  proxy := service.NewFooProxy(target, m)
 
   if val, err := proxy.Logic(false); err != nil {
     fmt.Println("err: ", err)
@@ -84,11 +100,16 @@ func main() {
   } else {
     fmt.Println("val: ", val)
   }
+
+  fmt.Println()
+
+  value := proxy.Foo()
+  fmt.Println("value: ", value)
 }
 ```
 
 ```bash
-$ go run main.go
+$ go run example/proxy/main.go
 [Wrapped] before
 [Before] before
 [Foo] logic
@@ -104,4 +125,11 @@ val:  foo logic
 [Wrapped] err occurred. err : emit error
 [Wrapped] after
 err:  emit error
+
+[Wrapped] before
+[Before] before
+[Foo] foo
+[After] after
+[Wrapped] after
+value:  1
 ```

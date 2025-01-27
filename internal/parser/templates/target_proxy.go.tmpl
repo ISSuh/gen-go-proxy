@@ -11,23 +11,44 @@ import (
 
 {{range .Interfaces}}
 
+const(
+    {{ $InterfaceName := .InterfaceName }}
+    {{range .AllAnnotations -}}
+        {{.AnnotationName}}AnnotationKeyOn{{$InterfaceName}} string = "{{.AnnotationName}}"
+    {{end}}
+)
+
 type {{.ProxyTypeName}}Middleware func(func(context.Context) error) func(context.Context) error
+type {{.ProxyTypeName}}MiddlewareByAnnotation map[string][]{{.ProxyTypeName}}Middleware
 
 type {{.ProxyTypeName}} struct {
     target {{if .IsDiffrentPackage}}{{.InterfacePackage}}.{{end}}{{.InterfaceName}}
-    middlewares []{{.ProxyTypeName}}Middleware
+    {{range .AllAnnotations -}}
+        {{.AnnotationName}}Middlewares []{{.ProxyTypeName}}Middleware
+    {{end -}}
 }
 
-func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePackage}}.{{end}}{{.InterfaceName}}, middlewares ...{{.ProxyTypeName}}Middleware) *{{.ProxyTypeName}} {
-    return &{{.ProxyTypeName}}{
+func New{{.ProxyTypeName}}(target {{if .IsDiffrentPackage}}{{.InterfacePackage}}.{{end}}{{.InterfaceName}}, middlewares {{.ProxyTypeName}}MiddlewareByAnnotation) *{{.ProxyTypeName}} {
+    p := &{{.ProxyTypeName}}{
         target: target,
-        middlewares: middlewares,
     }
+
+    for key, value := range middlewares {
+        switch key {
+        {{ $InterfaceName := .InterfaceName }}
+        {{range .AllAnnotations -}}
+            case {{.AnnotationName}}AnnotationKeyOn{{$InterfaceName}}:
+                p.{{.AnnotationName}}Middlewares = value
+        {{end -}}
+        }
+    }
+
+    return p
 }
 
 {{range .Methods}}
 func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
-    {{if .IsTransaction -}}
+    {{if .UseProxy -}}
         {{if .HasResults -}}
             var (
             {{range .Results}}
@@ -38,52 +59,29 @@ func (p *{{.ProxyTypeName}}) {{.Name}}({{.Params}}) {{.ResultTypes}} {
 
         f := func({{.HelperContextParam}} context.Context) error {
         {{if .HasResults -}}
-            {{.ResultVars}} = p.target.{{.Name}}({{.ParamNamesWithHelperContext}})
-            if err != nil {
-                return err
-            }
+            {{.ResultVars}} = p.target.{{.Name}}( {{if .HasContext}} {{.ParamNamesWithHelperContext}} {{else}} {{.ParamNames}} {{end -}} )
+            {{if .HasError -}}
+                if err != nil {
+                    return err
+                }
+            {{end -}}
         {{else -}}
             p.target.{{.Name}}({{.ParamNames}})
         {{end -}}
             return nil
         }
 
-        for i := range p.middlewares {
-		    index := len(p.middlewares) - i - 1
-		    f = p.middlewares[index](f)
-	    }
-
-        f({{.UserContextParam}})
-        {{if .HasResults -}}
-            return {{.ResultVars}}
-        {{end -}}
-    {{else if .IsProxy -}}
-        {{if .HasResults -}}
-            var (
-            {{range .Results}}
-                {{.ResultVar}} {{.ResultType -}}
+        {{ $methodName := .Name }}
+        {{range $i, $v := .Annotations -}}
+            {{if eq $v.MethodName $methodName -}}
+                for i := range p.{{$v.AnnotationName}}Middlewares {
+                    index := len(p.{{$v.AnnotationName}}Middlewares) - i - 1
+                    f = p.{{$v.AnnotationName}}Middlewares[index](f)
+                }
             {{end}}
-            )
         {{end}}
-        
-        f := func({{.HelperContextParam}} context.Context) error {
-        {{if .HasResults -}}
-            {{.ResultVars}} = p.target.{{.Name}}({{.ParamNames}})
-            if err != nil {
-                return err
-            }
-        {{else -}}
-            p.target.{{.Name}}({{.ParamNames}})
-        {{end -}}
-            return nil
-        }
 
-        for i := range p.middlewares {
-		    index := len(p.middlewares) - i - 1
-		    f = p.middlewares[index](f)
-	    }
-
-        f(context.TODO())
+        f( {{if .HasContext}} {{.UserContextParam}} {{else}} context.TODO() {{end -}})
         {{if .HasResults -}}
             return {{.ResultVars}}
         {{end -}}

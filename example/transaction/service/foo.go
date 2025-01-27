@@ -41,6 +41,16 @@ type Foo interface {
 	FooBara(c context.Context, dto dto.Foo) error
 }
 
+type Foo2 interface {
+	// @transactional
+	Create(c context.Context, dto dto.Foo) (int, error)
+
+	Find(c context.Context, id int) (*entity.Foo, error)
+
+	// @transactional
+	FooBara(c context.Context, dto dto.Foo) error
+}
+
 type FooService struct {
 	repo repository.Foo
 }

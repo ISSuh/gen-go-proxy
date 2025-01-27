@@ -69,7 +69,17 @@ func After(next func(c context.Context) error) func(context.Context) error {
 
 func main() {
 	target := service.NewFoo()
-	proxy := service.NewFooProxy(target, Wrapped, Before, After)
+
+	// middleware by annotation
+	// key: annotation name
+	// value: middleware list
+	m := service.FooProxyMiddlewareByAnnotation{
+		"proxy":   {Wrapped, Before, After},
+		"custom1": {Wrapped},
+		"custom2": {Before, After},
+	}
+
+	proxy := service.NewFooProxy(target, m)
 
 	if val, err := proxy.Logic(false); err != nil {
 		fmt.Println("err: ", err)
@@ -84,4 +94,9 @@ func main() {
 	} else {
 		fmt.Println("val: ", val)
 	}
+
+	fmt.Println()
+
+	value := proxy.Foo()
+	fmt.Println("value: ", value)
 }

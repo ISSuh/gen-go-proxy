@@ -27,11 +27,14 @@ import (
 	"fmt"
 	"go/ast"
 	"strings"
+	"unicode"
 )
 
 const (
 	transactionComment = "@transactional"
 	proxyComment       = "@proxy"
+	annotationToken    = '@'
+	minAnnotationLen   = 2
 
 	errorType   = "error"
 	contextType = "context.Context"
@@ -40,9 +43,27 @@ const (
 	helperContextParam = "_helperCtx"
 )
 
+type Annotation struct {
+	ProxyTypeName  string
+	AnnotationName string
+	MethodName     string
+}
+
+type Annotations []Annotation
+
+func (a Annotations) Exist(annotation string) bool {
+	for _, an := range a {
+		if an.AnnotationName == annotation {
+			return true
+		}
+	}
+	return false
+}
+
 type Param struct {
-	Type string
-	Var  string
+	Type       string
+	Var        string
+	HasContext bool
 }
 
 func (p Param) Format() string {
@@ -50,6 +71,15 @@ func (p Param) Format() string {
 }
 
 type Params []Param
+
+func (p Params) HasContext() bool {
+	for _, param := range p {
+		if param.HasContext {
+			return true
+		}
+	}
+	return false
+}
 
 func (p Params) Format() string {
 	formats := []string{}
@@ -114,6 +144,7 @@ func (r Results) HasError() bool {
 type Method struct {
 	ProxyTypeName               string
 	Name                        string
+	Annotations                 Annotations
 	Params                      string
 	ParamNames                  string
 	ParamNamesWithHelperContext string
@@ -123,9 +154,25 @@ type Method struct {
 	ResultTypes                 string
 	Results                     Results
 	HasResults                  bool
-	IsTransaction               bool
-	IsProxy                     bool
+	UseProxy                    bool
 	HasError                    bool
+	HasContext                  bool
+}
+
+type Methods []Method
+
+func (m Methods) AllAnnotations() Annotations {
+	annotations := Annotations{}
+	for _, method := range m {
+		for _, annotation := range method.Annotations {
+			if annotations.Exist(annotation.AnnotationName) {
+				continue
+			}
+
+			annotations = append(annotations, annotation)
+		}
+	}
+	return annotations
 }
 
 func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, error) {
@@ -141,15 +188,14 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 			return nil, fmt.Errorf("method %s is not a function", methodName)
 		}
 
-		isTransaction := isTransactionMethod(method)
-		isProxy := isProxyMethod(method)
+		annotations := parseAnnotation(method, methodName, proxyTypeName)
 
-		params, err := parseMethodParams(funcType, isTransaction)
+		params, err := parseMethodParams(funcType)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("failed to parse method params for %s", methodName), err)
 		}
 
-		results, err := parseMethodResults(funcType, isTransaction, isProxy)
+		results, err := parseMethodResults(funcType)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("failed to parse method results for %s", methodName), err)
 		}
@@ -157,8 +203,8 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 		m := Method{
 			ProxyTypeName: proxyTypeName,
 			Name:          methodName,
-			IsTransaction: isTransaction,
-			IsProxy:       isProxy,
+			Annotations:   annotations,
+			UseProxy:      len(annotations) != 0,
 			Params:        params.Format(),
 			ParamNames:    params.FormatVars(false),
 			Results:       results,
@@ -166,9 +212,10 @@ func parseMethod(proxyTypeName string, iface *ast.InterfaceType) ([]Method, erro
 			ResultTypes:   results.FormatType(),
 			HasResults:    len(results) > 0,
 			HasError:      results.HasError(),
+			HasContext:    params.HasContext(),
 		}
 
-		if isTransaction {
+		if m.HasContext {
 			m.UserContextParam = userContextParam
 			m.HelperContextParam = helperContextParam
 			m.ParamNamesWithHelperContext = params.FormatVars(true)
@@ -188,7 +235,36 @@ func isProxyMethod(method *ast.Field) bool {
 	return method.Doc != nil && strings.Contains(method.Doc.Text(), proxyComment)
 }
 
-func parseMethodParams(funcType *ast.FuncType, isTransactional bool) (Params, error) {
+func parseAnnotation(method *ast.Field, methodName, proxyTypeName string) Annotations {
+	if method.Doc == nil {
+		return nil
+	}
+
+	annotations := Annotations{}
+	lines := strings.Split(method.Doc.Text(), "\n")
+	for i := range lines {
+		index := len(lines) - i - 1
+		if !isValidAnnotation(lines[index]) {
+			continue
+		}
+
+		annotation := strings.ToLower(lines[index][1:])
+		if annotations.Exist(annotation) {
+			continue
+		}
+
+		a := Annotation{
+			AnnotationName: strings.ToLower(lines[index][1:]),
+			MethodName:     methodName,
+			ProxyTypeName:  proxyTypeName,
+		}
+
+		annotations = append(annotations, a)
+	}
+	return annotations
+}
+
+func parseMethodParams(funcType *ast.FuncType) (Params, error) {
 	params := Params{}
 	hasContext := false
 	for _, param := range funcType.Params.List {
@@ -206,22 +282,19 @@ func parseMethodParams(funcType *ast.FuncType, isTransactional bool) (Params, er
 			}
 
 			p := Param{
-				Type: paramType,
-				Var:  paramName,
+				Type:       paramType,
+				Var:        paramName,
+				HasContext: hasContext,
 			}
 
 			params = append(params, p)
 		}
 	}
 
-	if isTransactional && !hasContext {
-		return nil, errors.New("transactional method must have a context.Context parameter")
-	}
-
 	return params, nil
 }
 
-func parseMethodResults(funcType *ast.FuncType, isTransactional, isProxy bool) (Results, error) {
+func parseMethodResults(funcType *ast.FuncType) (Results, error) {
 	results := Results{}
 	hasError := false
 	if funcType.Results != nil {
@@ -244,10 +317,6 @@ func parseMethodResults(funcType *ast.FuncType, isTransactional, isProxy bool) (
 
 			results = append(results, r)
 		}
-	}
-
-	if (isTransactional || isProxy) && !hasError {
-		return nil, errors.New("proxy or transactional method must return an error")
 	}
 
 	return results, nil
@@ -311,4 +380,26 @@ func exprFuncToString(t *ast.FuncType) string {
 	}
 
 	return "func(" + strings.Join(params, ", ") + ") " + resultFormat
+}
+
+func isValidAnnotation(s string) bool {
+	if len(s) < minAnnotationLen {
+		return false
+	}
+
+	if s[0] != annotationToken {
+		return false
+	}
+
+	if strings.Contains(s, " ") {
+		return false
+	}
+
+	for _, r := range s[1:] {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+
+	return true
 }

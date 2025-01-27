@@ -11,18 +11,32 @@ import (
 	service "github.com/ISSuh/simple-gen-proxy/example/transaction/service"
 )
 
+const (
+	transactionalAnnotationKeyOnFooBar string = "transactional"
+)
+
 type FooBarProxyMiddleware func(func(context.Context) error) func(context.Context) error
+type FooBarProxyMiddlewareByAnnotation map[string][]FooBarProxyMiddleware
 
 type FooBarProxy struct {
-	target      service.FooBar
-	middlewares []FooBarProxyMiddleware
+	target                   service.FooBar
+	transactionalMiddlewares []FooBarProxyMiddleware
 }
 
-func NewFooBarProxy(target service.FooBar, middlewares ...FooBarProxyMiddleware) *FooBarProxy {
-	return &FooBarProxy{
-		target:      target,
-		middlewares: middlewares,
+func NewFooBarProxy(target service.FooBar, middlewares FooBarProxyMiddlewareByAnnotation) *FooBarProxy {
+	p := &FooBarProxy{
+		target: target,
 	}
+
+	for key, value := range middlewares {
+		switch key {
+
+		case transactionalAnnotationKeyOnFooBar:
+			p.transactionalMiddlewares = value
+		}
+	}
+
+	return p
 }
 
 func (p *FooBarProxy) Create(_userCtx context.Context, foo dto.Foo, bar dto.Bar) (int, int, error) {
@@ -40,9 +54,9 @@ func (p *FooBarProxy) Create(_userCtx context.Context, foo dto.Foo, bar dto.Bar)
 		return nil
 	}
 
-	for i := range p.middlewares {
-		index := len(p.middlewares) - i - 1
-		f = p.middlewares[index](f)
+	for i := range p.transactionalMiddlewares {
+		index := len(p.transactionalMiddlewares) - i - 1
+		f = p.transactionalMiddlewares[index](f)
 	}
 
 	f(_userCtx)

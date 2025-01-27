@@ -5,18 +5,40 @@ package service
 
 import "context"
 
+const (
+	proxyAnnotationKeyOnFoo   string = "proxy"
+	custom2AnnotationKeyOnFoo string = "custom2"
+	custom1AnnotationKeyOnFoo string = "custom1"
+)
+
 type FooProxyMiddleware func(func(context.Context) error) func(context.Context) error
+type FooProxyMiddlewareByAnnotation map[string][]FooProxyMiddleware
 
 type FooProxy struct {
-	target      Foo
-	middlewares []FooProxyMiddleware
+	target             Foo
+	proxyMiddlewares   []FooProxyMiddleware
+	custom2Middlewares []FooProxyMiddleware
+	custom1Middlewares []FooProxyMiddleware
 }
 
-func NewFooProxy(target Foo, middlewares ...FooProxyMiddleware) *FooProxy {
-	return &FooProxy{
-		target:      target,
-		middlewares: middlewares,
+func NewFooProxy(target Foo, middlewares map[string][]FooProxyMiddleware) *FooProxy {
+	p := &FooProxy{
+		target: target,
 	}
+
+	for key, value := range middlewares {
+		switch key {
+
+		case proxyAnnotationKeyOnFoo:
+			p.proxyMiddlewares = value
+		case custom2AnnotationKeyOnFoo:
+			p.custom2Middlewares = value
+		case custom1AnnotationKeyOnFoo:
+			p.custom1Middlewares = value
+		}
+	}
+
+	return p
 }
 
 func (p *FooProxy) Logic(needEmitErr bool) (string, error) {
@@ -33,11 +55,118 @@ func (p *FooProxy) Logic(needEmitErr bool) (string, error) {
 		return nil
 	}
 
-	for i := range p.middlewares {
-		index := len(p.middlewares) - i - 1
-		f = p.middlewares[index](f)
+	for i := range p.proxyMiddlewares {
+		index := len(p.proxyMiddlewares) - i - 1
+		f = p.proxyMiddlewares[index](f)
 	}
 
 	f(context.TODO())
 	return r0, err
+}
+
+func (p *FooProxy) Foo() int {
+	var (
+		r0 int
+	)
+
+	f := func(context.Context) error {
+		r0 = p.target.Foo()
+		return nil
+	}
+
+	for i := range p.custom2Middlewares {
+		index := len(p.custom2Middlewares) - i - 1
+		f = p.custom2Middlewares[index](f)
+	}
+
+	for i := range p.custom1Middlewares {
+		index := len(p.custom1Middlewares) - i - 1
+		f = p.custom1Middlewares[index](f)
+	}
+
+	f(context.TODO())
+	return r0
+}
+
+const (
+	proxyAnnotationKeyOnBar   string = "proxy"
+	custom2AnnotationKeyOnBar string = "custom2"
+	custom1AnnotationKeyOnBar string = "custom1"
+)
+
+type BarProxyMiddleware func(func(context.Context) error) func(context.Context) error
+type BarProxyMiddlewareByAnnotation map[string][]BarProxyMiddleware
+
+type BarProxy struct {
+	target             Bar
+	proxyMiddlewares   []BarProxyMiddleware
+	custom2Middlewares []BarProxyMiddleware
+	custom1Middlewares []BarProxyMiddleware
+}
+
+func NewBarProxy(target Bar, middlewares BarProxyMiddlewareByAnnotation) *BarProxy {
+	p := &BarProxy{
+		target: target,
+	}
+
+	for key, value := range middlewares {
+		switch key {
+
+		case proxyAnnotationKeyOnBar:
+			p.proxyMiddlewares = value
+		case custom2AnnotationKeyOnBar:
+			p.custom2Middlewares = value
+		case custom1AnnotationKeyOnBar:
+			p.custom1Middlewares = value
+		}
+	}
+
+	return p
+}
+
+func (p *BarProxy) Logic(needEmitErr bool) (string, error) {
+	var (
+		r0  string
+		err error
+	)
+
+	f := func(context.Context) error {
+		r0, err = p.target.Logic(needEmitErr)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	for i := range p.proxyMiddlewares {
+		index := len(p.proxyMiddlewares) - i - 1
+		f = p.proxyMiddlewares[index](f)
+	}
+
+	f(context.TODO())
+	return r0, err
+}
+
+func (p *BarProxy) Foo() int {
+	var (
+		r0 int
+	)
+
+	f := func(context.Context) error {
+		r0 = p.target.Foo()
+		return nil
+	}
+
+	for i := range p.custom2Middlewares {
+		index := len(p.custom2Middlewares) - i - 1
+		f = p.custom2Middlewares[index](f)
+	}
+
+	for i := range p.custom1Middlewares {
+		index := len(p.custom1Middlewares) - i - 1
+		f = p.custom1Middlewares[index](f)
+	}
+
+	f(context.TODO())
+	return r0
 }

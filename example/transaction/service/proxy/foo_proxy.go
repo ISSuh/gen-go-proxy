@@ -11,18 +11,32 @@ import (
 	service "github.com/ISSuh/simple-gen-proxy/example/transaction/service"
 )
 
+const (
+	transactionalAnnotationKeyOnFoo string = "transactional"
+)
+
 type FooProxyMiddleware func(func(context.Context) error) func(context.Context) error
+type FooProxyMiddlewareByAnnotation map[string][]FooProxyMiddleware
 
 type FooProxy struct {
-	target      service.Foo
-	middlewares []FooProxyMiddleware
+	target                   service.Foo
+	transactionalMiddlewares []FooProxyMiddleware
 }
 
-func NewFooProxy(target service.Foo, middlewares ...FooProxyMiddleware) *FooProxy {
-	return &FooProxy{
-		target:      target,
-		middlewares: middlewares,
+func NewFooProxy(target service.Foo, middlewares FooProxyMiddlewareByAnnotation) *FooProxy {
+	p := &FooProxy{
+		target: target,
 	}
+
+	for key, value := range middlewares {
+		switch key {
+
+		case transactionalAnnotationKeyOnFoo:
+			p.transactionalMiddlewares = value
+		}
+	}
+
+	return p
 }
 
 func (p *FooProxy) Create(_userCtx context.Context, dto dto.Foo) (int, error) {
@@ -39,9 +53,9 @@ func (p *FooProxy) Create(_userCtx context.Context, dto dto.Foo) (int, error) {
 		return nil
 	}
 
-	for i := range p.middlewares {
-		index := len(p.middlewares) - i - 1
-		f = p.middlewares[index](f)
+	for i := range p.transactionalMiddlewares {
+		index := len(p.transactionalMiddlewares) - i - 1
+		f = p.transactionalMiddlewares[index](f)
 	}
 
 	f(_userCtx)
@@ -65,9 +79,86 @@ func (p *FooProxy) FooBara(_userCtx context.Context, dto dto.Foo) error {
 		return nil
 	}
 
-	for i := range p.middlewares {
-		index := len(p.middlewares) - i - 1
-		f = p.middlewares[index](f)
+	for i := range p.transactionalMiddlewares {
+		index := len(p.transactionalMiddlewares) - i - 1
+		f = p.transactionalMiddlewares[index](f)
+	}
+
+	f(_userCtx)
+	return err
+}
+
+const (
+	transactionalAnnotationKeyOnFoo2 string = "transactional"
+)
+
+type Foo2ProxyMiddleware func(func(context.Context) error) func(context.Context) error
+type Foo2ProxyMiddlewareByAnnotation map[string][]Foo2ProxyMiddleware
+
+type Foo2Proxy struct {
+	target                   service.Foo2
+	transactionalMiddlewares []Foo2ProxyMiddleware
+}
+
+func NewFoo2Proxy(target service.Foo2, middlewares Foo2ProxyMiddlewareByAnnotation) *Foo2Proxy {
+	p := &Foo2Proxy{
+		target: target,
+	}
+
+	for key, value := range middlewares {
+		switch key {
+
+		case transactionalAnnotationKeyOnFoo2:
+			p.transactionalMiddlewares = value
+		}
+	}
+
+	return p
+}
+
+func (p *Foo2Proxy) Create(_userCtx context.Context, dto dto.Foo) (int, error) {
+	var (
+		r0  int
+		err error
+	)
+
+	f := func(_helperCtx context.Context) error {
+		r0, err = p.target.Create(_helperCtx, dto)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	for i := range p.transactionalMiddlewares {
+		index := len(p.transactionalMiddlewares) - i - 1
+		f = p.transactionalMiddlewares[index](f)
+	}
+
+	f(_userCtx)
+	return r0, err
+}
+
+func (p *Foo2Proxy) Find(_userCtx context.Context, id int) (*entity.Foo, error) {
+	return p.target.Find(_userCtx, id)
+}
+
+func (p *Foo2Proxy) FooBara(_userCtx context.Context, dto dto.Foo) error {
+	var (
+		err error
+	)
+
+	f := func(_helperCtx context.Context) error {
+		err = p.target.FooBara(_helperCtx, dto)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	for i := range p.transactionalMiddlewares {
+		index := len(p.transactionalMiddlewares) - i - 1
+		f = p.transactionalMiddlewares[index](f)
 	}
 
 	f(_userCtx)
