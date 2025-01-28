@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 
 // Copyright (c) 2025 ISSuh
 
@@ -20,36 +20,65 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package option
+package infra
 
 import (
+	"context"
+	"database/sql"
 	"errors"
-
-	"github.com/alexflint/go-arg"
 )
 
-type InterfacePackage struct {
-	Name string `arg:"-n,--interface-package-name" help:"package name of the target interface source code file"`
-	Path string `arg:"-l,--interface-package-path" help:"package path of the target interface source code file"`
-}
+const txKey = "tx"
 
-type Arguments struct {
-	InterfacePackage
-	Target          string `arg:"required,-t,--target" help:"target directory path of the interface source code file. is required"`
-	Output          string `arg:"-o,--output" help:"output file path.default is the same as the target interface source code file"`
-	Package         string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
-	UseTxMiddleware bool   `arg:"-x,--use-tx-middleware" help:"generate transaction middleware. default is false"`
-}
-
-func NewArguments() Arguments {
-	a := Arguments{}
-	arg.MustParse(&a)
-	return a
-}
-
-func (a *Arguments) Validate() error {
-	if a.Target == "" {
-		return errors.New("target interface source code file is empty")
+func FromContext(c context.Context) (*sql.Tx, error) {
+	db, ok := c.Value(txKey).(*sql.Tx)
+	if !ok || db == nil {
+		return nil, errors.New("transaction not found")
 	}
+
+	return db, nil
+}
+
+// implement example user-defined transaction from transaction interface
+type sqlTransaction struct {
+	db *sql.DB
+	tx *sql.Tx
+}
+
+func NewSQLTransaction(db *sql.DB) *sqlTransaction {
+	return &sqlTransaction{
+		db: db,
+	}
+}
+
+func (t *sqlTransaction) From(c context.Context) error {
+	tx, ok := c.Value(txKey).(*sql.Tx)
+	if !ok {
+		return errors.New("transaction not found")
+	}
+
+	t.tx = tx
 	return nil
+}
+
+func (t *sqlTransaction) Begin() error {
+	tx, err := t.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	t.tx = tx
+	return nil
+}
+
+func (t *sqlTransaction) Commit() error {
+	return t.tx.Commit()
+}
+
+func (t *sqlTransaction) Rollback() error {
+	return t.tx.Rollback()
+}
+
+func (t *sqlTransaction) Regist(c context.Context) context.Context {
+	return context.WithValue(c, txKey, t.tx)
 }

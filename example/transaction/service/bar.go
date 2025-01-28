@@ -26,9 +26,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
-	entity "github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/repository"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/dto"
+	entity "github.com/ISSuh/gen-go-proxy/example/transaction/entity"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/repository"
 )
 
 type Bar interface {

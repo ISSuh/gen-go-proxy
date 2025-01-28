@@ -28,8 +28,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ISSuh/simple-gen-proxy/internal/option"
-	"github.com/ISSuh/simple-gen-proxy/internal/parser"
+	"github.com/ISSuh/gen-go-proxy/internal/option"
+	"github.com/ISSuh/gen-go-proxy/internal/parser"
 )
 
 const (

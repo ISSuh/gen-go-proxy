@@ -26,7 +26,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ISSuh/simple-gen-proxy/example/proxy/service"
+	"github.com/ISSuh/gen-go-proxy/example/proxy/service"
 )
 
 // implement middleware
@@ -73,13 +73,22 @@ func main() {
 	// middleware by annotation
 	// key: annotation name
 	// value: middleware list
+	// can use middleware helper type
+	// or raw type map[string][]func(func(context.Context) error) func(context.Context) error
+	//
+	// 	m := map[string][]func(func(context.Context) error) func(context.Context) error{
+	// 		"proxy":   {Wrapped, Before, After},
+	//    "custom1": {Wrapped},
+	//    "custom2": {Before, After},
+	//  }
 	m := service.FooProxyMiddlewareByAnnotation{
 		"proxy":   {Wrapped, Before, After},
 		"custom1": {Wrapped},
 		"custom2": {Before, After},
 	}
 
-	proxy := service.NewFooProxy(target, m)
+	// if use middleware helper type, should call helper.To() when create proxy
+	proxy := service.NewFooProxy(target, m.To())
 
 	if val, err := proxy.Logic(false); err != nil {
 		fmt.Println("err: ", err)

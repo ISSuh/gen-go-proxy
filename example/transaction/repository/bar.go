@@ -24,53 +24,11 @@ package repository
 
 import (
 	"context"
-	"errors"
 
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
-	"gorm.io/gorm"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/entity"
 )
 
 type Bar interface {
 	Create(c context.Context, value int) (int, error)
 	Find(id int) (*entity.Bar, error)
-}
-
-type barRepository struct {
-	db *gorm.DB
-}
-
-func NewBarRepository(db *gorm.DB) *barRepository {
-	return &barRepository{
-		db: db,
-	}
-}
-
-func (r *barRepository) Create(c context.Context, value int) (int, error) {
-	conn, ok := c.Value(txKey).(*gorm.DB)
-	if !ok {
-		return 0, errors.New("transaction not found")
-	}
-
-	if value < 0 {
-		return 0, errors.New("value must be greater than 0")
-	}
-
-	b := &entity.Bar{
-		Value: int(value),
-	}
-
-	tx := conn.Create(b)
-	if err := tx.Error; err != nil {
-		return 0, err
-	}
-	return b.ID, nil
-}
-
-func (r *barRepository) Find(id int) (*entity.Bar, error) {
-	b := &entity.Bar{}
-	tx := r.db.Where("id = ?", id)
-	if err := tx.First(b).Error; err != nil {
-		return nil, err
-	}
-	return b, nil
 }

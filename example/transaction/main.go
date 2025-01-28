@@ -24,15 +24,17 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/dto"
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/repository"
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/service"
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/service/proxy"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/dto"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/entity"
+	infraorm "github.com/ISSuh/gen-go-proxy/example/transaction/repository/gorm"
+	infrsql "github.com/ISSuh/gen-go-proxy/example/transaction/repository/sql"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/service"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/service/proxy"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -47,7 +49,15 @@ func createTestDB(db *gorm.DB) error {
 	return nil
 }
 
-func openDB() (*gorm.DB, error) {
+func openSQLDB() (*sql.DB, error) {
+	db, err := sql.Open("mysql", "root:1@tcp(127.0.0.1:33551)/TESTDB")
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func openGORMDB() (*gorm.DB, error) {
 	dsn := "root:1@tcp(127.0.0.1:33551)/TESTDB"
 
 	config := &gorm.Config{
@@ -78,31 +88,66 @@ func newServer() *Server {
 	return &Server{}
 }
 
-func (s *Server) init() error {
-	db, err := openDB()
+// sample use standard sql package
+func (s *Server) useSQL() error {
+	db, err := openSQLDB()
 	if err != nil {
 		return err
 	}
 
 	// implement transaction factory function
 	txFatory := func() (proxy.Transaction, error) {
-		tx := repository.NewGORMTransaction(db)
+		tx := infrsql.NewSQLTransaction(db)
 		return tx, nil
 	}
 
 	// create transaction middleware
 	txMiddleware := proxy.TxMiddleware(txFatory)
-
 	m := map[string][]func(func(context.Context) error) func(context.Context) error{
 		"transactional": {txMiddleware},
 	}
 
 	// create single service
-	fooRepo := repository.NewFooRepository(db)
+	fooRepo := infrsql.NewFooSQLRepository(db)
 	fooService := service.NewFooService(fooRepo)
 	s.foo = proxy.NewFooProxy(fooService, m)
 
-	barRepo := repository.NewBarRepository(db)
+	barRepo := infrsql.NewBarSQLRepository(db)
+	barService := service.NewBarService(barRepo)
+	s.bar = proxy.NewBarProxy(barService, m)
+
+	// create aggregate service
+	foobarService := service.NewFooBarService(s.foo, s.bar)
+	s.foobar = proxy.NewFooBarProxy(foobarService, m)
+
+	return nil
+}
+
+// sample use gorm package
+func (s *Server) useGORM() error {
+	db, err := openGORMDB()
+	if err != nil {
+		return err
+	}
+
+	// implement transaction factory function
+	txFatory := func() (proxy.Transaction, error) {
+		tx := infraorm.NewGORMTransaction(db)
+		return tx, nil
+	}
+
+	// create transaction middleware
+	txMiddleware := proxy.TxMiddleware(txFatory)
+	m := map[string][]func(func(context.Context) error) func(context.Context) error{
+		"transactional": {txMiddleware},
+	}
+
+	// create single service
+	fooRepo := infraorm.NewFooGORMRepository(db)
+	fooService := service.NewFooService(fooRepo)
+	s.foo = proxy.NewFooProxy(fooService, m)
+
+	barRepo := infraorm.NewBarGORMRepository(db)
 	barService := service.NewBarService(barRepo)
 	s.bar = proxy.NewBarProxy(barService, m)
 
@@ -119,6 +164,7 @@ func (s *Server) route() {
 		value, err := strconv.Atoi(valueStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -128,6 +174,7 @@ func (s *Server) route() {
 		id, err := s.foo.Create(r.Context(), d)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -161,6 +208,7 @@ func (s *Server) route() {
 		value, err := strconv.Atoi(valueStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -170,6 +218,7 @@ func (s *Server) route() {
 		id, err := s.bar.Create(r.Context(), d)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -183,6 +232,7 @@ func (s *Server) route() {
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -201,6 +251,7 @@ func (s *Server) route() {
 		fooValue, err := strconv.Atoi(fooValueStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -208,6 +259,7 @@ func (s *Server) route() {
 		barValue, err := strconv.Atoi(barValueStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -222,6 +274,7 @@ func (s *Server) route() {
 		fooID, barID, err := s.foobar.Create(r.Context(), f, b)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
@@ -244,7 +297,7 @@ func (s *Server) Run() {
 
 func main() {
 	server := newServer()
-	if err := server.init(); err != nil {
+	if err := server.useSQL(); err != nil {
 		panic(err)
 	}
 

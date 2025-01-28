@@ -20,36 +20,52 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package option
+package infra
 
 import (
+	"context"
 	"errors"
 
-	"github.com/alexflint/go-arg"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/entity"
+	"gorm.io/gorm"
 )
 
-type InterfacePackage struct {
-	Name string `arg:"-n,--interface-package-name" help:"package name of the target interface source code file"`
-	Path string `arg:"-l,--interface-package-path" help:"package path of the target interface source code file"`
+type BarGORMRepository struct {
+	db *gorm.DB
 }
 
-type Arguments struct {
-	InterfacePackage
-	Target          string `arg:"required,-t,--target" help:"target directory path of the interface source code file. is required"`
-	Output          string `arg:"-o,--output" help:"output file path.default is the same as the target interface source code file"`
-	Package         string `arg:"-p,--package" help:"package name of the generated code. default is the same as the target interface source code file"`
-	UseTxMiddleware bool   `arg:"-x,--use-tx-middleware" help:"generate transaction middleware. default is false"`
-}
-
-func NewArguments() Arguments {
-	a := Arguments{}
-	arg.MustParse(&a)
-	return a
-}
-
-func (a *Arguments) Validate() error {
-	if a.Target == "" {
-		return errors.New("target interface source code file is empty")
+func NewBarGORMRepository(db *gorm.DB) *BarGORMRepository {
+	return &BarGORMRepository{
+		db: db,
 	}
-	return nil
+}
+
+func (r *BarGORMRepository) Create(c context.Context, value int) (int, error) {
+	conn, err := FromContext(c)
+	if err != nil {
+		return 0, err
+	}
+
+	if value < 0 {
+		return 0, errors.New("value must be greater than 0")
+	}
+
+	b := &entity.Bar{
+		Value: int(value),
+	}
+
+	tx := conn.Create(b)
+	if err := tx.Error; err != nil {
+		return 0, err
+	}
+	return b.ID, nil
+}
+
+func (r *BarGORMRepository) Find(id int) (*entity.Bar, error) {
+	b := &entity.Bar{}
+	tx := r.db.Where("id = ?", id)
+	if err := tx.First(b).Error; err != nil {
+		return nil, err
+	}
+	return b, nil
 }

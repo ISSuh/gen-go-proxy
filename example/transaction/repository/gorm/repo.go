@@ -20,11 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package repository
+package infra
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
 	"gorm.io/gorm"
@@ -32,49 +31,16 @@ import (
 
 const txKey = "tx"
 
-type sqlTransaction struct {
-	db *sql.DB
-	tx *sql.Tx
-}
-
-func NewSQLTransaction(db *sql.DB) *sqlTransaction {
-	return &sqlTransaction{
-		db: db,
-	}
-}
-
-func (t *sqlTransaction) From(c context.Context) error {
-	tx, ok := c.Value(txKey).(*sql.Tx)
-	if !ok {
-		return errors.New("transaction not found")
+func FromContext(c context.Context) (*gorm.DB, error) {
+	db, ok := c.Value(txKey).(*gorm.DB)
+	if !ok || db == nil {
+		return nil, errors.New("transaction not found")
 	}
 
-	t.tx = tx
-	return nil
+	return db, nil
 }
 
-func (t *sqlTransaction) Begin() error {
-	tx, err := t.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	t.tx = tx
-	return nil
-}
-
-func (t *sqlTransaction) Commit() error {
-	return t.tx.Commit()
-}
-
-func (t *sqlTransaction) Rollback() error {
-	return t.tx.Rollback()
-}
-
-func (t *sqlTransaction) Regist(c context.Context) context.Context {
-	return context.WithValue(c, txKey, t.tx)
-}
-
+// implement example user-defined transaction from transaction interface
 type gormTransaction struct {
 	db *gorm.DB
 }

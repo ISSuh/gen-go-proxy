@@ -1,6 +1,6 @@
 # transaction example
 
-This example guides you on how to generate and use proxy code and transaction middleware with simple-gen-proxy.
+This example guides you on how to generate and use proxy code and transaction middleware with gen-go-proxy.
 
 ## Usage
 
@@ -10,7 +10,7 @@ This example guides you on how to generate and use proxy code and transaction mi
 package service
 
 type Foo interface {
-  // use @transactional comment if you want to generate proxy code
+  // use @{annotation name} comment if you want to generate proxy code
   // @transactional
   Create(c context.Context, dto dto.Foo) (int, error)
 
@@ -35,16 +35,17 @@ type FooBar interface {
 ### implement user trasaction on repository layer
 
 ```go
-package repository
-
-import (
-  "context"
-  "database/sql"
-  "errors"
-)
-
 const txKey = "tx"
 
+func FromContext(c context.Context) (*sql.Tx, error) {
+  db, ok := c.Value(txKey).(*sql.Tx)
+  if !ok || db == nil {
+    return nil, errors.New("transaction not found")
+  }
+  return db, nil
+}
+
+// implement example user-defined transaction from transaction interface
 type sqlTransaction struct {
   db *sql.DB
   tx *sql.Tx
@@ -89,14 +90,63 @@ func (t *sqlTransaction) Regist(c context.Context) context.Context {
 }
 ```
 
+```go
+type FooSQLRepository struct {
+  db *sql.DB
+}
+
+func NewFooSQLRepository(db *sql.DB) *FooSQLRepository {
+  return &FooSQLRepository{
+    db: db,
+  }
+}
+
+func (r *FooSQLRepository) Create(c context.Context, value int) (int, error) {
+  tx, err := FromContext(c)
+  if err != nil {
+    return 0, err
+  }
+
+  if value < 0 {
+    return 0, errors.New("value must be greater than 0")
+  }
+
+  result, err := tx.ExecContext(c, "INSERT INTO foo (value) VALUES (?)", value)
+  if err != nil {
+    return 0, err
+  }
+
+  newID, err := result.LastInsertId()
+  if err != nil {
+    return 0, err
+  }
+
+  return int(newID), nil
+}
+
+func (r *FooSQLRepository) Find(id int) (*entity.Foo, error) {
+  fooID := 0
+  fooValue := 0
+  err := r.db.QueryRow("SELECT * FROM foo WHERE id = ?", id).Scan(&fooID, &fooValue)
+  if err != nil {
+    return nil, err
+  }
+
+  return &entity.Foo{
+    ID:    fooID,
+    Value: fooValue,
+  }, nil
+}
+```
+
 ### generate proxy code
 
 ```bash
-$ simple-gen-proxy -t example/transaction/service \
+$ gen-go-proxy -t example/transaction/service \
                    -o example/transaction/service/proxy \
                    -p proxy \
                    -n service \
-                   -l github.com/ISSuh/simple-gen-proxy/example/transaction/service \
+                   -l github.com/ISSuh/gen-go-proxy/example/transaction/service \
                    -x
 ```
 
@@ -127,19 +177,22 @@ func (s *server) init() error {
 
   // create transaction middleware
   txMiddleware := proxy.TxMiddleware(txFatory)
+  m := map[string][]func(func(context.Context) error) func(context.Context) error{
+    "transactional": {txMiddleware},
+  }
 
   // create single service
-  fooRepo := repository.NewFooRepository(db)
+  fooRepo := infrsql.NewFooSQLRepository(db)
   fooService := service.NewFooService(fooRepo)
-  s.foo = proxy.NewFooProxy(fooService, txMiddleware)
+  s.foo = proxy.NewFooProxy(fooService, m)
 
-  barRepo := repository.NewBarRepository(db)
+  barRepo := infrsql.NewBarSQLRepository(db)
   barService := service.NewBarService(barRepo)
-  s.bar = proxy.NewBarProxy(barService, txMiddleware)
+  s.bar = proxy.NewBarProxy(barService, m)
 
   // create aggregate service
   foobarService := service.NewFooBarService(s.foo, s.bar)
-  s.foobar = proxy.NewFooBarProxy(foobarService, txMiddleware)
+  s.foobar = proxy.NewFooBarProxy(foobarService, m)
 }
 
 ```
@@ -173,7 +226,7 @@ func (s *server) init() error {
 
 ### transaction
 
-Save the tx instance (***sql.Tx**, ***gorm.DB**, etc...) that you use in the context through a user-defined **Transaction.Regist (ccontext.Context) error**.
+Save the tx instance (***sql.Tx**, ***gorm.DB**, etc...) that you use in the **context** through a user-defined **Transaction.Regist (ccontext.Context) error**.
 
 If you call a service code that already has transaction middleware, determine whether there is a transaction that is already in progress through**Transaction.From(c context.Context) error**, and if the transaction already exists, participate without creating additional transactions.
 

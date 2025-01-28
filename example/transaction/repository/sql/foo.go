@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 
 // Copyright (c) 2025 ISSuh
 
@@ -20,66 +20,59 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package service
+package infra
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"errors"
 
-	"github.com/ISSuh/gen-go-proxy/example/transaction/dto"
-	entity "github.com/ISSuh/gen-go-proxy/example/transaction/entity"
-	"github.com/ISSuh/gen-go-proxy/example/transaction/repository"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/entity"
 )
 
-type Foo interface {
-	// @transactional
-	Create(c context.Context, dto dto.Foo) (int, error)
-
-	Find(c context.Context, id int) (*entity.Foo, error)
-
-	// @transactional
-	FooBara(c context.Context, dto dto.Foo) error
+type FooSQLRepository struct {
+	db *sql.DB
 }
 
-type Foo2 interface {
-	// @transactional
-	Create(c context.Context, dto dto.Foo) (int, error)
-
-	Find(c context.Context, id int) (*entity.Foo, error)
-
-	// @transactional
-	FooBara(c context.Context, dto dto.Foo) error
-}
-
-type FooService struct {
-	repo repository.Foo
-}
-
-func NewFooService(repo repository.Foo) Foo {
-	return &FooService{
-		repo: repo,
+func NewFooSQLRepository(db *sql.DB) *FooSQLRepository {
+	return &FooSQLRepository{
+		db: db,
 	}
 }
 
-func (s *FooService) Create(c context.Context, dto dto.Foo) (int, error) {
-	fmt.Printf("[Foo]CreateA\n")
-	id, err := s.repo.Create(c, dto.Value)
+func (r *FooSQLRepository) Create(c context.Context, value int) (int, error) {
+	tx, err := FromContext(c)
 	if err != nil {
 		return 0, err
 	}
-	return id, nil
+
+	if value < 0 {
+		return 0, errors.New("value must be greater than 0")
+	}
+
+	result, err := tx.ExecContext(c, "INSERT INTO foo (value) VALUES (?)", value)
+	if err != nil {
+		return 0, err
+	}
+
+	newID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(newID), nil
 }
 
-func (s *FooService) Find(c context.Context, id int) (*entity.Foo, error) {
-	fmt.Printf("[Foo]Find\n")
-	foo, err := s.repo.Find(id)
+func (r *FooSQLRepository) Find(id int) (*entity.Foo, error) {
+	fooID := 0
+	fooValue := 0
+	err := r.db.QueryRow("SELECT * FROM foo WHERE id = ?", id).Scan(&fooID, &fooValue)
 	if err != nil {
 		return nil, err
 	}
-	return foo, nil
-}
 
-func (s *FooService) FooBara(c context.Context, dto dto.Foo) error {
-	fmt.Printf("[Foo]FooBara\n")
-	return nil
+	return &entity.Foo{
+		ID:    fooID,
+		Value: fooValue,
+	}, nil
 }

@@ -24,54 +24,11 @@ package repository
 
 import (
 	"context"
-	"errors"
 
-	"github.com/ISSuh/simple-gen-proxy/example/transaction/entity"
-	"gorm.io/gorm"
+	"github.com/ISSuh/gen-go-proxy/example/transaction/entity"
 )
 
 type Foo interface {
 	Create(c context.Context, value int) (int, error)
 	Find(id int) (*entity.Foo, error)
-}
-
-type fooRepository struct {
-	db *gorm.DB
-}
-
-func NewFooRepository(db *gorm.DB) *fooRepository {
-	return &fooRepository{
-		db: db,
-	}
-}
-
-func (r *fooRepository) Create(c context.Context, value int) (int, error) {
-	conn, ok := c.Value(txKey).(*gorm.DB)
-	if !ok {
-		return 0, errors.New("transaction not found")
-	}
-
-	if value < 0 {
-		return 0, errors.New("value must be greater than 0")
-	}
-
-	f := &entity.Foo{
-		Value: int(value),
-	}
-
-	tx := conn.Create(f)
-	if err := tx.Error; err != nil {
-		return 0, err
-	}
-
-	return f.ID, nil
-}
-
-func (r *fooRepository) Find(id int) (*entity.Foo, error) {
-	f := &entity.Foo{}
-	tx := r.db.Where("id = ?", id)
-	if err := tx.First(f).Error; err != nil {
-		return nil, err
-	}
-	return f, nil
 }

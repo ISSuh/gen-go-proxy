@@ -1,6 +1,6 @@
 # proxy example
 
-This example guides you on how to generate and use proxy code with simple-gen-proxy.
+This example guides you on how to generate and use proxy code with gen-go-proxy.
 
 ## Usage
 
@@ -66,7 +66,7 @@ func After(next func(c context.Context) error) func(context.Context) error {
 ### generate proxy code
 
 ```bash
-$ simple-gen-proxy -t example/proxy/service
+$ gen-go-proxy -t example/proxy/service
 ```
 
 ### use generated proxy code
@@ -79,13 +79,24 @@ func main() {
   // middleware by annotation
   // key: annotation name
   // value: middleware list
+  // can use middleware helper type
+  // or raw type map[string][]func(func(context.Context) error) func(context.Context) error
+  //
+  //  m := map[string][]func(func(context.Context) error) func(context.Context) error{
+  //    "proxy":   {Wrapped, Before, After},
+  //    "custom1": {Wrapped},
+  //    "custom2": {Before, After},
+  //  }
+  //
   m := service.FooProxyMiddlewareByAnnotation{
     "proxy":   {Wrapped, Before, After},
     "custom1": {Wrapped},
     "custom2": {Before, After},
   }
 
-  proxy := service.NewFooProxy(target, m)
+
+  // if use middleware helper type, should call helper.To() when create proxy
+  proxy := service.NewFooProxy(target, m.To())
 
   if val, err := proxy.Logic(false); err != nil {
     fmt.Println("err: ", err)

@@ -1,4 +1,4 @@
-module github.com/ISSuh/simple-gen-proxy
+module github.com/ISSuh/gen-go-proxy
 
 go 1.23.3
 
