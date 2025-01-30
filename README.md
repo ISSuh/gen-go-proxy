@@ -13,7 +13,7 @@ You can also display a dedicated annotation(comment) in the method of the interf
 To install Simple Gen Proxy, use the following command:
 
 ```bash
-go install github.com/ISSuh/gen-go-proxy
+go install github.com/ISSuh/gen-go-proxy@lastest
 ```
 
 ## Usage
@@ -59,6 +59,87 @@ $ gen-go-proxy -t ./example/service \
               -x
 ```
 
+## Annotation & Middleware
+
+By declaring a specific annotation keyword as an comment to the interface, the middleware may be registered for each annotation to operate the proxy.
+
+Basically, the annotation can be declared @ and can include lowercase albabetts and numbers.
+
+It is possible to designate multiple annotations in the method, and the middleware of the declared annotation is executed first in the middleware call order for multiple annotations.
+
+```go
+type Example interface {
+  // @annotation1
+  A() error
+
+  // Middleware for @notation2 runs first and then @notation3 middleware runs
+  // @annotation2
+  // @annotation3
+  B(int a)
+}
+```
+
+The middleware was inspired by the middleware pattern  implemented by Golang's basic library through net/http's **http.HandleFunc** like "**func middleware(next http.HandlerFunc) http.HandlerFunc**".
+
+When registering middleware in annotation, you can use the helper type that is generated when the proxy code is generated, or when it is middleware that is commonly used by multiple proxies, you can use it by defining it directly as raw type.
+
+If there are multiple middleware registered in the annotation, the first registered middleware starts to be called.
+
+```go
+func middleware1(next func(c context.Context) error) func(context.Context) error {
+  return func(c context.Context) error {
+    fmt.Println("[middleware1]")
+    // run next middleware or target logic
+    return next(c)
+  }
+}
+
+func middleware2(next func(c context.Context) error) func(context.Context) error {
+  return func(c context.Context) error {
+    fmt.Println("[middleware2]")
+    // run next middleware or target logic
+    return next(c)
+  }
+}
+
+func middleware3(next func(c context.Context) error) func(context.Context) error {
+  return func(c context.Context) error {
+    fmt.Println("[middleware3]")
+    // run next middleware or target logic
+    return next(c)
+  }
+}
+
+func main() {
+  target := service.NewExample()
+
+  // middleware by annotation
+  // key: annotation name
+  // value: middleware list
+  // can use middleware helper type
+  // or raw type map[string][]func(func(context.Context) error) func(context.Context) error
+  //
+  //  m := map[string][]func(func(context.Context) error) func(context.Context) error{
+  //   "annotation1":   {middleware1, middleware2},
+  //   "annotation2": {middleware3},
+  //   "annotation3": {middleware1, middleware2, middleware3},
+  //  }
+  m := service.ExampleProxyMiddlewareByAnnotation{
+    "annotation1": {middleware1, middleware2},
+    "annotation2": {middleware3},
+    "annotation3": {middleware1, middleware2, middleware3},
+  }
+
+  // if use middleware helper type,
+  // should call helper.To() when create proxy
+  proxy := service.NewExampleProxy(target, m.To())
+
+  err := proxy.A()
+  
+  proxy.B(2)
+}
+```
+
 ## Example
 
 implement interface and adjust user custom annotation for method
@@ -85,7 +166,6 @@ generate proxy code
 # will create {interface source file name}_proxy.go on same dir
 $ gen-go-proxy -t path/target/dir
 ```
-
 
 implement user defined middleware for proxy
 
@@ -137,28 +217,13 @@ Also if multiple annotations are applied to one method, middleware is called in 
 
 ```go
   target := service.NewFoo()
-
-  // middleware by annotation
-  // key: annotation name
-  // value: middleware list
-  // can use middleware helper type
-  // or raw type map[string][]func(func(context.Context) error) func(context.Context) error
-  //
-  //  m := map[string][]func(func(context.Context) error) func(context.Context) error{
-  //    "proxy":   {Wrapped, Before, After},
-  //    "custom1": {Wrapped},
-  //    "custom2": {Before, After},
-  //  }
   m := service.FooProxyMiddlewareByAnnotation{
     "proxy":   {Wrapped, Before, After},
     "custom1": {Wrapped},
     "custom2": {Before, After},
   }
 
-  // if use middleware helper type,
-  // should call helper.To() when create proxy
   proxy := service.NewFooProxy(target, m.To())
-
   proxy.A()
   proxy.B()
 ```
@@ -175,7 +240,7 @@ Through a separate proxy, the service layer is implemented to form a dependency 
 
 When a transaction invokes a several sub-service code to which it is applied, it is implemented to first create a transaction and store it in context so that it is processed as a single transaction.
 
-#### Usage
+#### Usage Transaction middleware
 
 implement interface and adjust user custom annotation for method
 
