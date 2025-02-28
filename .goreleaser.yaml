@@ -16,7 +16,7 @@ builds:
   - env:
       - CGO_ENABLED=0
     binary: gen-go-proxy
-    main: main.go
+    main: cmd/gen-go-proxy/main.go
     goos:
       - linux
       - windows
