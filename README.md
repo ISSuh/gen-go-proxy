@@ -13,7 +13,7 @@ You can also display a dedicated annotation(comment) in the method of the interf
 To install Simple Gen Proxy, use the following command:
 
 ```bash
-go install github.com/ISSuh/gen-go-proxy@lastest
+go install github.com/ISSuh/gen-go-proxy@latest
 ```
 
 ## Usage
